@@ -40,6 +40,14 @@ http://localhost:8080/api/v1/login/oauth2/code/google
 - `POST /auth/signup`
 - `POST /auth/login`
 - `GET /auth/me`
+- `GET|PATCH /tenants/me` (legacy-compatible `GET|PUT /tenants/{userId}`)
+- `GET /tenants/me/favorites`
+- `POST|DELETE /tenants/me/favorites/{propertyId}`
+- `GET /tenants/me/residences`
+- `GET|POST /applications`
+- `PUT /applications/{id}/status`
+- `GET /leases`
+- `GET /leases/{id}/payments`
 - `GET /oauth2/authorization/google` when the `oauth` profile is active
 
 All protected requests use `Authorization: Bearer <access-token>`.
@@ -47,11 +55,9 @@ All protected requests use `Authorization: Bearer <access-token>`.
 ## Next milestones
 
 1. Refresh-token rotation and Google-user provisioning/success handling
-2. Profile endpoints
-3. Property multipart uploads, geocoding, and PostGIS search
-4. Favorites and applications
-5. Leases and payment schedules
-6. Payment-provider integration
+2. Property multipart uploads, geocoding, and PostGIS search
+3. Payment-method token storage
+4. Payment-provider integration and webhooks
 
 Run verification with:
 
