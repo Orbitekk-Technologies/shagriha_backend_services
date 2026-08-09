@@ -30,6 +30,16 @@ public class LeaseService {
                         rs.getDate("end_date").toLocalDate(), rs.getBigDecimal("rent"), rs.getBigDecimal("deposit"))).optional();
     }
 
+    public List<LeaseView> forProperty(long propertyId, UUID managerId) {
+        boolean owned = jdbc.sql("SELECT EXISTS(SELECT 1 FROM properties WHERE id=:propertyId AND manager_user_id=:managerId)")
+                .param("propertyId", propertyId).param("managerId", managerId).query(Boolean.class).single();
+        if (!owned) throw ApiException.notFound("Property not found");
+        return jdbc.sql("SELECT * FROM leases WHERE property_id=:propertyId ORDER BY start_date DESC")
+                .param("propertyId", propertyId).query((rs, n) -> view(rs.getLong("id"), rs.getLong("property_id"),
+                        rs.getObject("tenant_user_id", UUID.class), rs.getDate("start_date").toLocalDate(),
+                        rs.getDate("end_date").toLocalDate(), rs.getBigDecimal("rent"), rs.getBigDecimal("deposit"))).list();
+    }
+
     public List<PaymentView> payments(long leaseId, UUID userId, boolean manager) {
         boolean allowed = jdbc.sql("SELECT EXISTS(SELECT 1 FROM leases le JOIN properties p ON p.id=le.property_id WHERE le.id=:leaseId AND " +
                         (manager ? "p.manager_user_id=:userId" : "le.tenant_user_id=:userId") + ")")
