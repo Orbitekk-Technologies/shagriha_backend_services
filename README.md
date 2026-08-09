@@ -48,6 +48,11 @@ http://localhost:8080/api/v1/login/oauth2/code/google
 - `PUT /applications/{id}/status`
 - `GET /leases`
 - `GET /leases/{id}/payments`
+- `GET|PATCH|PUT /managers/me` (legacy-compatible `GET|PUT /managers/{userId}`)
+- `GET /managers/me/properties` (legacy-compatible `GET /managers/{userId}/properties`)
+- `GET /properties` and `GET /properties/{id}`
+- `POST /properties` (manager-only multipart property creation)
+- `GET /properties/{id}/leases` (owning manager only)
 - `GET /oauth2/authorization/google` when the `oauth` profile is active
 
 All protected requests use `Authorization: Bearer <access-token>`.
