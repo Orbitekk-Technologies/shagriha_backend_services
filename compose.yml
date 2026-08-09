@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgis/postgis:17-3.5
+    environment:
+      POSTGRES_DB: shagriha
+      POSTGRES_USER: shagriha
+      POSTGRES_PASSWORD: shagriha
+    ports:
+      - "5432:5432"
+    volumes:
+      - shagriha_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shagriha -d shagriha"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  shagriha_postgres:

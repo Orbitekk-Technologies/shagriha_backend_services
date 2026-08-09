@@ -1,0 +1,60 @@
+package com.orbitekk.shagriha.auth;
+
+import com.orbitekk.shagriha.user.*;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.*;
+import org.springframework.http.HttpStatus;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+import java.util.UUID;
+
+@RestController
+@RequestMapping("/auth")
+public class AuthController {
+    private final UserRepository users; private final PasswordEncoder passwords;
+    private final AuthenticationManager authentication; private final TokenService tokens; private final JdbcClient jdbc;
+    public AuthController(UserRepository users, PasswordEncoder passwords, AuthenticationManager authentication,
+                          TokenService tokens, JdbcClient jdbc) {
+        this.users = users; this.passwords = passwords; this.authentication = authentication; this.tokens = tokens; this.jdbc = jdbc;
+    }
+    @PostMapping("/signup") @ResponseStatus(HttpStatus.CREATED) @Transactional
+    public AuthResponse signup(@Valid @RequestBody SignupRequest request) {
+        if (!request.password().equals(request.confirmPassword())) throw new IllegalArgumentException("Passwords do not match");
+        if (users.existsByUsernameIgnoreCase(request.username())) throw new IllegalArgumentException("Username is already registered");
+        if (users.existsByEmailIgnoreCase(request.email())) throw new IllegalArgumentException("Email is already registered");
+        AppUser user = users.save(new AppUser(UUID.randomUUID(), request.username().trim(), request.email().trim().toLowerCase(),
+                passwords.encode(request.password()), request.role()));
+        String table = user.getRole() == UserRole.TENANT ? "tenant_profiles" : "manager_profiles";
+        jdbc.sql("INSERT INTO " + table + " (user_id, name) VALUES (:userId, :name)")
+                .param("userId", user.getId()).param("name", request.username().trim()).update();
+        return response(user);
+    }
+    @PostMapping("/login")
+    public AuthResponse login(@Valid @RequestBody LoginRequest request) {
+        authentication.authenticate(new UsernamePasswordAuthenticationToken(request.login(), request.password()));
+        AppUser user = users.findByUsernameIgnoreCaseOrEmailIgnoreCase(request.login(), request.login()).orElseThrow();
+        return response(user);
+    }
+    @GetMapping("/me")
+    public Map<String, Object> me(@org.springframework.security.core.annotation.AuthenticationPrincipal Jwt jwt) {
+        UUID id = UUID.fromString(jwt.getSubject());
+        AppUser user = users.findById(id).orElseThrow();
+        String table = user.getRole() == UserRole.TENANT ? "tenant_profiles" : "manager_profiles";
+        Map<String, Object> profile = jdbc.sql("SELECT id, user_id AS \"userId\", name, phone_number AS \"phoneNumber\", image_url AS image FROM " + table + " WHERE user_id=:id")
+                .param("id", id).query().singleRow();
+        return Map.of("authInfo", Map.of("userId", id, "username", user.getUsername()),
+                "userInfo", profile, "userRole", user.getRole().name().toLowerCase());
+    }
+    private AuthResponse response(AppUser user) { return new AuthResponse(tokens.issue(user), user.getId(), user.getUsername(), user.getRole()); }
+    public record SignupRequest(@NotBlank @Size(max=80) String username, @Email @NotBlank String email,
+            @Size(min=10,max=100) String password, @NotBlank String confirmPassword, @NotNull UserRole role) {}
+    public record LoginRequest(@NotBlank String login, @NotBlank String password) {}
+    public record AuthResponse(TokenService.AccessToken token, UUID userId, String username, UserRole role) {}
+}

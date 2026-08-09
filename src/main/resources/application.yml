@@ -1,0 +1,38 @@
+spring:
+  application:
+    name: shagriha-backend-services
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/shagriha}
+    username: ${DATABASE_USERNAME:shagriha}
+    password: ${DATABASE_PASSWORD:shagriha}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+server:
+  port: ${PORT:8080}
+  servlet:
+    context-path: /api/v1
+
+app:
+  frontend-url: ${FRONTEND_URL:http://localhost:3000}
+  jwt:
+    issuer: ${JWT_ISSUER:shagriha-api}
+    access-token-ttl: PT15M
+    refresh-token-ttl: P30D
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
