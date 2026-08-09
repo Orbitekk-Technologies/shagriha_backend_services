@@ -47,7 +47,7 @@ public class AuthController {
         UUID id = UUID.fromString(jwt.getSubject());
         AppUser user = users.findById(id).orElseThrow();
         String table = user.getRole() == UserRole.TENANT ? "tenant_profiles" : "manager_profiles";
-        Map<String, Object> profile = jdbc.sql("SELECT id, user_id AS \"userId\", name, phone_number AS \"phoneNumber\", image_url AS image FROM " + table + " WHERE user_id=:id")
+        Map<String, Object> profile = jdbc.sql("SELECT p.id, p.user_id AS \"userId\", p.name, u.email, p.phone_number AS \"phoneNumber\", p.image_url AS image FROM " + table + " p JOIN users u ON u.id=p.user_id WHERE p.user_id=:id")
                 .param("id", id).query().singleRow();
         return Map.of("authInfo", Map.of("userId", id, "username", user.getUsername()),
                 "userInfo", profile, "userRole", user.getRole().name().toLowerCase());

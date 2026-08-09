@@ -9,6 +9,8 @@ import java.util.*;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
+    @ExceptionHandler(ApiException.class)
+    ResponseEntity<ApiError> api(ApiException ex) { return error(ex.status(), ex.getMessage(), Map.of()); }
     @ExceptionHandler({IllegalArgumentException.class})
     ResponseEntity<ApiError> badRequest(RuntimeException ex) { return error(HttpStatus.BAD_REQUEST, ex.getMessage(), Map.of()); }
     @ExceptionHandler(BadCredentialsException.class)
