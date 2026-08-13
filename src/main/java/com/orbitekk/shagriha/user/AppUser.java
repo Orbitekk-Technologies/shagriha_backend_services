@@ -28,6 +28,7 @@ public class AppUser {
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }
     public UserRole getRole() { return role; }
+    public void enableManagerRole() { this.role = UserRole.MANAGER; }
     public AuthProvider getProvider() { return provider; }
     public boolean isEnabled() { return enabled; }
 }
