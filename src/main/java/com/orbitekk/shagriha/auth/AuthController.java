@@ -52,9 +52,31 @@ public class AuthController {
         return Map.of("authInfo", Map.of("userId", id, "username", user.getUsername()),
                 "userInfo", profile, "userRole", user.getRole().name().toLowerCase());
     }
+    @PostMapping("/enable-manager") @Transactional
+    public AuthResponse enableManager(@org.springframework.security.core.annotation.AuthenticationPrincipal Jwt jwt,
+                                      @Valid @RequestBody EnableManagerRequest request) {
+        if (!request.authorizedToList()) {
+            throw new IllegalArgumentException("Authorization to list or manage properties is required");
+        }
+
+        UUID id = UUID.fromString(jwt.getSubject());
+        AppUser user = users.findById(id).orElseThrow();
+        Integer managerProfiles = jdbc.sql("SELECT count(*) FROM manager_profiles WHERE user_id=:id")
+                .param("id", id).query(Integer.class).single();
+        if (managerProfiles == 0) {
+            String name = jdbc.sql("SELECT name FROM tenant_profiles WHERE user_id=:id")
+                    .param("id", id).query(String.class).optional().orElse(user.getUsername());
+            jdbc.sql("INSERT INTO manager_profiles (user_id, name) VALUES (:id, :name)")
+                    .param("id", id).param("name", name).update();
+        }
+        user.enableManagerRole();
+        users.save(user);
+        return response(user);
+    }
     private AuthResponse response(AppUser user) { return new AuthResponse(tokens.issue(user), user.getId(), user.getUsername(), user.getRole()); }
     public record SignupRequest(@NotBlank @Size(max=80) String username, @Email @NotBlank String email,
             @Size(min=10,max=100) String password, @NotBlank String confirmPassword, @NotNull UserRole role) {}
     public record LoginRequest(@NotBlank String login, @NotBlank String password) {}
+    public record EnableManagerRequest(@AssertTrue boolean authorizedToList) {}
     public record AuthResponse(TokenService.AccessToken token, UUID userId, String username, UserRole role) {}
 }
