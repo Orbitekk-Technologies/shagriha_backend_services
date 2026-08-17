@@ -50,7 +50,7 @@ public class SecurityConfig {
                 .requestMatchers("/auth/signup", "/auth/login", "/auth/refresh", "/actuator/health/**").permitAll()
                 .requestMatchers(HttpMethod.GET, "/properties", "/properties/*").permitAll()
                 .requestMatchers("/managers/**").hasRole("MANAGER")
-                .requestMatchers("/tenants/**").hasRole("TENANT")
+                .requestMatchers("/tenants/**").hasAnyRole("TENANT", "MANAGER")
                 .anyRequest().authenticated())
             .oauth2ResourceServer(resource -> resource.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
         if (clients.getIfAvailable() != null) http.oauth2Login(login -> {});
