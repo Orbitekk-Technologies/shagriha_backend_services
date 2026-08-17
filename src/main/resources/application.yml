@@ -1,6 +1,10 @@
 spring:
   application:
     name: shagriha-backend-services
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 50MB
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/shagriha}
     username: ${DATABASE_USERNAME:shagriha}
@@ -35,4 +39,3 @@ management:
     health:
       probes:
         enabled: true
-

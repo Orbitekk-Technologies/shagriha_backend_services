@@ -53,7 +53,7 @@ public class PropertyService {
         String postalCode = required(fields, "postalCode");
         BigDecimal price = decimal(fields, "pricePerMonth", false);
         BigDecimal deposit = decimal(fields, "securityDeposit", true);
-        BigDecimal fee = decimal(fields, "applicationFee", true);
+        BigDecimal fee = optionalDecimal(fields, "applicationFee", BigDecimal.ZERO);
         int beds = integer(fields, "beds", 0, 100);
         int baths = integer(fields, "baths", 0, 100);
         int squareFeet = integer(fields, "squareFeet", 1, Integer.MAX_VALUE);
@@ -118,6 +118,17 @@ public class PropertyService {
             if (value.signum() < 0 || (!zeroAllowed && value.signum() == 0)) throw new NumberFormatException();
             return value;
         } catch (NumberFormatException ex) { throw new IllegalArgumentException(key + " must be a valid non-negative number"); }
+    }
+    private static BigDecimal optionalDecimal(Map<String, String> fields, String key, BigDecimal defaultValue) {
+        String value = fields.get(key);
+        if (value == null || value.isBlank()) return defaultValue;
+        try {
+            BigDecimal parsed = new BigDecimal(value);
+            if (parsed.signum() < 0) throw new NumberFormatException();
+            return parsed;
+        } catch (NumberFormatException ex) {
+            throw new IllegalArgumentException(key + " must be a valid non-negative number");
+        }
     }
     private static int integer(Map<String, String> fields, String key, int min, int max) {
         try {

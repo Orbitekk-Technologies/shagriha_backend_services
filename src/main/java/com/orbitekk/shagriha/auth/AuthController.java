@@ -29,11 +29,14 @@ public class AuthController {
         if (!request.password().equals(request.confirmPassword())) throw new IllegalArgumentException("Passwords do not match");
         if (users.existsByUsernameIgnoreCase(request.username())) throw new IllegalArgumentException("Username is already registered");
         if (users.existsByEmailIgnoreCase(request.email())) throw new IllegalArgumentException("Email is already registered");
-        AppUser user = users.save(new AppUser(UUID.randomUUID(), request.username().trim(), request.email().trim().toLowerCase(),
+        AppUser user = users.saveAndFlush(new AppUser(UUID.randomUUID(), request.username().trim(), request.email().trim().toLowerCase(),
                 passwords.encode(request.password()), request.role()));
-        String table = user.getRole() == UserRole.TENANT ? "tenant_profiles" : "manager_profiles";
-        jdbc.sql("INSERT INTO " + table + " (user_id, name) VALUES (:userId, :name)")
+        jdbc.sql("INSERT INTO tenant_profiles (user_id, name) VALUES (:userId, :name)")
                 .param("userId", user.getId()).param("name", request.username().trim()).update();
+        if (user.getRole() == UserRole.MANAGER) {
+            jdbc.sql("INSERT INTO manager_profiles (user_id, name) VALUES (:userId, :name)")
+                    .param("userId", user.getId()).param("name", request.username().trim()).update();
+        }
         return response(user);
     }
     @PostMapping("/login")

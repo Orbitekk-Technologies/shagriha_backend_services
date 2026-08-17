@@ -15,12 +15,12 @@ public class RentalApplicationController {
     private final RentalApplicationService applications;
     public RentalApplicationController(RentalApplicationService applications) { this.applications = applications; }
 
-    @GetMapping List<RentalApplicationService.ApplicationView> list(@AuthenticationPrincipal Jwt jwt) {
-        return applications.list(subject(jwt), isManager(jwt));
+    @GetMapping List<RentalApplicationService.ApplicationView> list(@AuthenticationPrincipal Jwt jwt,
+            @RequestParam(required = false) String view) {
+        return applications.list(subject(jwt), managerView(jwt, view));
     }
     @PostMapping RentalApplicationService.ApplicationView create(@AuthenticationPrincipal Jwt jwt,
             @Valid @RequestBody RentalApplicationService.CreateRequest request) {
-        if (isManager(jwt)) throw com.orbitekk.shagriha.common.ApiException.forbidden("Only tenants can apply for properties");
         return applications.create(subject(jwt), request);
     }
     @PutMapping("/{id}/status") RentalApplicationService.ApplicationView status(@AuthenticationPrincipal Jwt jwt,
@@ -30,5 +30,11 @@ public class RentalApplicationController {
     }
     private static UUID subject(Jwt jwt) { return UUID.fromString(jwt.getSubject()); }
     private static boolean isManager(Jwt jwt) { return jwt.getClaimAsStringList("roles").contains("ROLE_MANAGER"); }
+    static boolean managerView(Jwt jwt, String view) {
+        if ("manager".equalsIgnoreCase(view) && !isManager(jwt)) {
+            throw com.orbitekk.shagriha.common.ApiException.forbidden("Only managers can view listing applications");
+        }
+        return isManager(jwt) && !"tenant".equalsIgnoreCase(view);
+    }
     public record StatusRequest(@NotBlank String status) {}
 }
