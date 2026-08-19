@@ -39,3 +39,7 @@ management:
     health:
       probes:
         enabled: true
+
+mapbox:
+  access-token: ${MAPBOX_ACCESS_TOKEN:}
+  nearby-cache-ttl: ${MAPBOX_NEARBY_CACHE_TTL:P7D}

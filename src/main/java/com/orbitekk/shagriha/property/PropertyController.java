@@ -6,6 +6,8 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import com.orbitekk.shagriha.location.NearbyPlacesResponseDto;
+import com.orbitekk.shagriha.location.NearbyPlacesService;
 
 import java.math.BigDecimal;
 import java.util.*;
@@ -15,7 +17,10 @@ import java.util.*;
 public class PropertyController {
     private final PropertyReader reader;
     private final PropertyService properties;
-    public PropertyController(PropertyReader reader, PropertyService properties) { this.reader = reader; this.properties = properties; }
+    private final NearbyPlacesService nearbyPlaces;
+    public PropertyController(PropertyReader reader, PropertyService properties, NearbyPlacesService nearbyPlaces) {
+        this.reader = reader; this.properties = properties; this.nearbyPlaces = nearbyPlaces;
+    }
 
     @GetMapping List<PropertyView> list(
             @RequestParam(required=false) BigDecimal priceMin, @RequestParam(required=false) BigDecimal priceMax,
@@ -28,10 +33,21 @@ public class PropertyController {
 
     @GetMapping("/{id}") PropertyView get(@PathVariable long id) { return reader.get(id); }
 
+    @GetMapping("/{id}/nearby") NearbyPlacesResponseDto nearby(@PathVariable long id) {
+        return nearbyPlaces.get(id);
+    }
+
     @PostMapping(consumes = "multipart/form-data") @ResponseStatus(HttpStatus.CREATED)
     @PreAuthorize("hasRole('MANAGER')")
     PropertyView create(@AuthenticationPrincipal Jwt jwt, @RequestParam Map<String, String> fields,
                         @RequestParam(name="photos", required=false) List<MultipartFile> photos) {
         return properties.create(UUID.fromString(jwt.getSubject()), fields, photos);
+    }
+
+    @PutMapping(path="/{id}", consumes = "multipart/form-data")
+    @PreAuthorize("hasRole('MANAGER')")
+    PropertyView update(@PathVariable long id, @AuthenticationPrincipal Jwt jwt,
+                        @RequestParam Map<String, String> fields) {
+        return properties.update(id, UUID.fromString(jwt.getSubject()), fields);
     }
 }
