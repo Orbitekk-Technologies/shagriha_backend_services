@@ -5,6 +5,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import com.orbitekk.shagriha.location.NearbyPlacesCache;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -15,10 +16,12 @@ import java.util.*;
 public class PropertyService {
     private final JdbcClient jdbc;
     private final PropertyReader properties;
+    private final NearbyPlacesCache nearbyCache;
 
-    public PropertyService(JdbcClient jdbc, PropertyReader properties) {
+    public PropertyService(JdbcClient jdbc, PropertyReader properties, NearbyPlacesCache nearbyCache) {
         this.jdbc = jdbc;
         this.properties = properties;
+        this.nearbyCache = nearbyCache;
     }
 
     public List<PropertyView> list(BigDecimal priceMin, BigDecimal priceMax, Integer beds, Integer baths,
@@ -46,10 +49,13 @@ public class PropertyService {
         requireManager(managerId);
         String name = required(fields, "name");
         String description = required(fields, "description");
-        String address = required(fields, "address");
+        String address = required(fields, "addressLine1");
+        String addressLine2 = optional(fields, "addressLine2");
         String city = required(fields, "city");
-        String state = required(fields, "state");
-        String country = required(fields, "country");
+        String state = required(fields, "stateName");
+        String stateCode = optional(fields, "stateCode");
+        String country = required(fields, "countryName");
+        String countryCode = required(fields, "countryCode");
         String postalCode = required(fields, "postalCode");
         BigDecimal price = decimal(fields, "pricePerMonth", false);
         BigDecimal deposit = decimal(fields, "securityDeposit", true);
@@ -57,11 +63,18 @@ public class PropertyService {
         int beds = integer(fields, "beds", 0, 100);
         int baths = integer(fields, "baths", 0, 100);
         int squareFeet = integer(fields, "squareFeet", 1, Integer.MAX_VALUE);
-        double longitude = floating(fields.get("longitude"));
-        double latitude = floating(fields.get("latitude"));
+        double longitude = requiredCoordinate(fields, "longitude", -180, 180);
+        double latitude = requiredCoordinate(fields, "latitude", -90, 90);
 
-        long locationId = jdbc.sql("INSERT INTO locations(address,city,state,country,postal_code,coordinates) VALUES(:address,:city,:state,:country,:postalCode,ST_SetSRID(ST_MakePoint(:longitude,:latitude),4326)::geography) RETURNING id")
+        long locationId = jdbc.sql("""
+                INSERT INTO locations(address_line1,address_line2,city,state_name,state_code,country_name,country_code,
+                    postal_code,formatted_address,mapbox_feature_id,coordinates)
+                VALUES(:address,:addressLine2,:city,:state,:stateCode,:country,:countryCode,:postalCode,
+                    :formattedAddress,:mapboxFeatureId,ST_SetSRID(ST_MakePoint(:longitude,:latitude),4326)::geography) RETURNING id
+                """)
                 .param("address", address).param("city", city).param("state", state).param("country", country)
+                .param("addressLine2", addressLine2).param("stateCode", stateCode).param("countryCode", countryCode)
+                .param("formattedAddress", optional(fields, "formattedAddress")).param("mapboxFeatureId", optional(fields, "mapboxFeatureId"))
                 .param("postalCode", postalCode).param("longitude", longitude).param("latitude", latitude)
                 .query(Long.class).single();
         long propertyId = jdbc.sql("""
@@ -96,6 +109,44 @@ public class PropertyService {
         return properties.get(propertyId);
     }
 
+    @Transactional
+    public PropertyView update(long propertyId, UUID managerId, Map<String, String> fields) {
+        if (!properties.isManagedBy(propertyId, managerId)) throw ApiException.notFound("Property not found");
+        double longitude = requiredCoordinate(fields, "longitude", -180, 180);
+        double latitude = requiredCoordinate(fields, "latitude", -90, 90);
+        boolean locationChanged = jdbc.sql("""
+                SELECT NOT ST_Equals(l.coordinates::geometry, ST_SetSRID(ST_MakePoint(:longitude,:latitude),4326))
+                FROM locations l JOIN properties p ON p.location_id=l.id WHERE p.id=:id
+                """).param("longitude", longitude).param("latitude", latitude).param("id", propertyId)
+                .query(Boolean.class).single();
+        jdbc.sql("""
+                UPDATE locations SET address_line1=:address,address_line2=:addressLine2,city=:city,
+                    state_name=:stateName,state_code=:stateCode,country_name=:countryName,country_code=:countryCode,
+                    postal_code=:postalCode,formatted_address=:formattedAddress,mapbox_feature_id=:mapboxFeatureId,
+                    coordinates=ST_SetSRID(ST_MakePoint(:longitude,:latitude),4326)::geography
+                WHERE id=(SELECT location_id FROM properties WHERE id=:id)
+                """).param("address", required(fields, "addressLine1")).param("addressLine2", optional(fields, "addressLine2"))
+                .param("city", required(fields, "city")).param("stateName", required(fields, "stateName"))
+                .param("stateCode", optional(fields, "stateCode")).param("countryName", required(fields, "countryName"))
+                .param("countryCode", required(fields, "countryCode")).param("postalCode", required(fields, "postalCode"))
+                .param("formattedAddress", optional(fields, "formattedAddress")).param("mapboxFeatureId", optional(fields, "mapboxFeatureId"))
+                .param("longitude", longitude).param("latitude", latitude).param("id", propertyId).update();
+        jdbc.sql("""
+                UPDATE properties SET name=:name,description=:description,price_per_month=:price,
+                    security_deposit=:deposit,pets_allowed=:pets,parking_included=:parking,beds=:beds,baths=:baths,
+                    square_feet=:squareFeet,property_type=:propertyType WHERE id=:id
+                """).param("name", required(fields, "name")).param("description", required(fields, "description"))
+                .param("price", decimal(fields, "pricePerMonth", false)).param("deposit", decimal(fields, "securityDeposit", true))
+                .param("pets", bool(fields.get("isPetsAllowed"))).param("parking", bool(fields.get("isParkingIncluded")))
+                .param("beds", integer(fields, "beds", 0, 100)).param("baths", integer(fields, "baths", 0, 100))
+                .param("squareFeet", integer(fields, "squareFeet", 1, Integer.MAX_VALUE))
+                .param("propertyType", required(fields, "propertyType")).param("id", propertyId).update();
+        jdbc.sql("DELETE FROM property_amenities WHERE property_id=:id").param("id", propertyId).update();
+        insertValues(propertyId, "property_amenities", "amenity", stringSet(fields.get("amenities")));
+        if (locationChanged) nearbyCache.invalidate(propertyId);
+        return properties.get(propertyId);
+    }
+
     private void requireManager(UUID managerId) {
         boolean exists = jdbc.sql("SELECT EXISTS(SELECT 1 FROM manager_profiles WHERE user_id=:id)")
                 .param("id", managerId).query(Boolean.class).single();
@@ -111,6 +162,10 @@ public class PropertyService {
         String value = fields.get(key);
         if (value == null || value.isBlank()) throw new IllegalArgumentException(key + " is required");
         return value.trim();
+    }
+    private static String optional(Map<String, String> fields, String key) {
+        String value = fields.get(key);
+        return value == null || value.isBlank() ? null : value.trim();
     }
     private static BigDecimal decimal(Map<String, String> fields, String key, boolean zeroAllowed) {
         try {
@@ -137,10 +192,12 @@ public class PropertyService {
             return value;
         } catch (NumberFormatException ex) { throw new IllegalArgumentException(key + " is invalid"); }
     }
-    private static double floating(String value) {
-        if (value == null || value.isBlank()) return 0;
-        try { return Double.parseDouble(value); }
-        catch (NumberFormatException ex) { throw new IllegalArgumentException("Coordinates are invalid"); }
+    private static double requiredCoordinate(Map<String, String> fields, String key, double min, double max) {
+        try {
+            double value = Double.parseDouble(required(fields, key));
+            if (!Double.isFinite(value) || value < min || value > max) throw new NumberFormatException();
+            return value;
+        } catch (NumberFormatException ex) { throw new IllegalArgumentException("Coordinates are invalid"); }
     }
     private static boolean bool(String value) { return Boolean.parseBoolean(value); }
     private static LocalDate date(String value) { return value == null || value.isBlank() ? null : LocalDate.parse(value); }

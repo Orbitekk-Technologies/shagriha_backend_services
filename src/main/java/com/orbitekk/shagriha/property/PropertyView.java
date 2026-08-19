@@ -13,8 +13,11 @@ public record PropertyView(
         String propertyType, Instant postedDate, double averageRating, int numberOfReviews,
         long locationId, UUID managerUserId, LocationView location, ManagerView manager) {
     public record Coordinates(double longitude, double latitude) {}
-    public record LocationView(long id, String address, String city, String state,
-                               String country, String postalCode, Coordinates coordinates) {}
+    public record LocationView(long id, String address, String addressLine1, String addressLine2,
+                               String city, String state, String stateName, String stateCode,
+                               String country, String countryName, String countryCode,
+                               String postalCode, String formattedAddress, String mapboxFeatureId,
+                               Coordinates coordinates) {}
     public record ManagerView(long id, UUID userId, String name, String email,
                               String phoneNumber, String image) {}
 }

@@ -27,16 +27,16 @@ public class AuthController {
     @PostMapping("/signup") @ResponseStatus(HttpStatus.CREATED) @Transactional
     public AuthResponse signup(@Valid @RequestBody SignupRequest request) {
         if (!request.password().equals(request.confirmPassword())) throw new IllegalArgumentException("Passwords do not match");
-        if (users.existsByUsernameIgnoreCase(request.username())) throw new IllegalArgumentException("Username is already registered");
-        if (users.existsByEmailIgnoreCase(request.email())) throw new IllegalArgumentException("Email is already registered");
-        AppUser user = users.saveAndFlush(new AppUser(UUID.randomUUID(), request.username().trim(), request.email().trim().toLowerCase(),
-                passwords.encode(request.password()), request.role()));
-        jdbc.sql("INSERT INTO tenant_profiles (user_id, name) VALUES (:userId, :name)")
-                .param("userId", user.getId()).param("name", request.username().trim()).update();
-        if (user.getRole() == UserRole.MANAGER) {
-            jdbc.sql("INSERT INTO manager_profiles (user_id, name) VALUES (:userId, :name)")
-                    .param("userId", user.getId()).param("name", request.username().trim()).update();
+        String email = request.email().trim().toLowerCase();
+        if (users.existsByEmailIgnoreCase(email) || users.existsByUsernameIgnoreCase(email)) {
+            throw new IllegalArgumentException("Email is already registered");
         }
+        AppUser user = users.saveAndFlush(new AppUser(UUID.randomUUID(), email, email,
+                passwords.encode(request.password()), UserRole.MANAGER));
+        jdbc.sql("INSERT INTO tenant_profiles (user_id, name) VALUES (:userId, :name)")
+                .param("userId", user.getId()).param("name", email).update();
+        jdbc.sql("INSERT INTO manager_profiles (user_id, name) VALUES (:userId, :name)")
+                .param("userId", user.getId()).param("name", email).update();
         return response(user);
     }
     @PostMapping("/login")
@@ -49,7 +49,7 @@ public class AuthController {
     public Map<String, Object> me(@org.springframework.security.core.annotation.AuthenticationPrincipal Jwt jwt) {
         UUID id = UUID.fromString(jwt.getSubject());
         AppUser user = users.findById(id).orElseThrow();
-        String table = user.getRole() == UserRole.TENANT ? "tenant_profiles" : "manager_profiles";
+        String table = "manager_profiles";
         Map<String, Object> profile = jdbc.sql("SELECT p.id, p.user_id AS \"userId\", p.name, u.email, p.phone_number AS \"phoneNumber\", p.image_url AS image FROM " + table + " p JOIN users u ON u.id=p.user_id WHERE p.user_id=:id")
                 .param("id", id).query().singleRow();
         return Map.of("authInfo", Map.of("userId", id, "username", user.getUsername()),
@@ -77,8 +77,8 @@ public class AuthController {
         return response(user);
     }
     private AuthResponse response(AppUser user) { return new AuthResponse(tokens.issue(user), user.getId(), user.getUsername(), user.getRole()); }
-    public record SignupRequest(@NotBlank @Size(max=80) String username, @Email @NotBlank String email,
-            @Size(min=10,max=100) String password, @NotBlank String confirmPassword, @NotNull UserRole role) {}
+    public record SignupRequest(@Email @NotBlank @Size(max=80) String email,
+            @Size(min=10,max=100) String password, @NotBlank String confirmPassword) {}
     public record LoginRequest(@NotBlank String login, @NotBlank String password) {}
     public record EnableManagerRequest(@AssertTrue boolean authorizedToList) {}
     public record AuthResponse(TokenService.AccessToken token, UUID userId, String username, UserRole role) {}

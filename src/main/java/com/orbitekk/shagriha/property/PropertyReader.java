@@ -12,7 +12,8 @@ import java.util.UUID;
 @Component
 public class PropertyReader {
     private static final String SELECT = """
-        SELECT p.*, l.address, l.city, l.state, l.country, l.postal_code,
+        SELECT p.*, l.address_line1, l.address_line2, l.city, l.state_name, l.state_code,
+               l.country_name, l.country_code, l.postal_code, l.formatted_address, l.mapbox_feature_id,
                ST_X(l.coordinates::geometry) longitude, ST_Y(l.coordinates::geometry) latitude,
                mp.id manager_profile_id, mp.name manager_name, mp.phone_number manager_phone,
                mp.image_url manager_image, u.email manager_email
@@ -64,8 +65,11 @@ public class PropertyReader {
                 .param("id", id).query(String.class).list();
         List<String> highlights = jdbc.sql("SELECT highlight FROM property_highlights WHERE property_id=:id ORDER BY highlight")
                 .param("id", id).query(String.class).list();
-        var location = new PropertyView.LocationView(rs.getLong("location_id"), rs.getString("address"),
-                rs.getString("city"), rs.getString("state"), rs.getString("country"), rs.getString("postal_code"),
+        var location = new PropertyView.LocationView(rs.getLong("location_id"), rs.getString("address_line1"),
+                rs.getString("address_line1"), rs.getString("address_line2"), rs.getString("city"),
+                rs.getString("state_name"), rs.getString("state_name"), rs.getString("state_code"),
+                rs.getString("country_name"), rs.getString("country_name"), rs.getString("country_code"),
+                rs.getString("postal_code"), rs.getString("formatted_address"), rs.getString("mapbox_feature_id"),
                 new PropertyView.Coordinates(rs.getDouble("longitude"), rs.getDouble("latitude")));
         var manager = new PropertyView.ManagerView(rs.getLong("manager_profile_id"),
                 rs.getObject("manager_user_id", java.util.UUID.class), rs.getString("manager_name"),

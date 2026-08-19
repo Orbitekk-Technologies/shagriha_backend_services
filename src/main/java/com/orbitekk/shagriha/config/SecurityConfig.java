@@ -20,6 +20,7 @@ import org.springframework.security.oauth2.server.resource.authentication.JwtAut
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.web.SecurityFilterChain;
+import com.orbitekk.shagriha.auth.GoogleOAuthSuccessHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -42,18 +43,23 @@ public class SecurityConfig {
         return new ProviderManager(provider);
     }
     @Bean SecurityFilterChain securityFilterChain(HttpSecurity http,
-            ObjectProvider<ClientRegistrationRepository> clients) throws Exception {
+            ObjectProvider<ClientRegistrationRepository> clients,
+            GoogleOAuthSuccessHandler googleSuccessHandler,
+            @org.springframework.beans.factory.annotation.Value("${app.frontend-url}") String frontendUrl) throws Exception {
         http.csrf(csrf -> csrf.disable())
             .cors(cors -> {})
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/auth/signup", "/auth/login", "/auth/refresh", "/actuator/health/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/properties", "/properties/*").permitAll()
+                .requestMatchers(HttpMethod.GET, "/properties", "/properties/**").permitAll()
                 .requestMatchers("/managers/**").hasRole("MANAGER")
                 .requestMatchers("/tenants/**").hasAnyRole("TENANT", "MANAGER")
                 .anyRequest().authenticated())
             .oauth2ResourceServer(resource -> resource.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter())));
-        if (clients.getIfAvailable() != null) http.oauth2Login(login -> {});
+        if (clients.getIfAvailable() != null) http.oauth2Login(login -> login
+                .successHandler(googleSuccessHandler)
+                .failureHandler((request, response, exception) ->
+                        response.sendRedirect(frontendUrl + "/signin?oauthError=true")));
         return http.build();
     }
     @Bean JwtAuthenticationConverter jwtAuthenticationConverter() {
