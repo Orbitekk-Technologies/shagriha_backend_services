@@ -31,6 +31,21 @@ public class PropertyController {
         return properties.list(priceMin, priceMax, beds, baths, propertyType, squareFeetMin, squareFeetMax, amenities, favoriteIds, location);
     }
 
+    @GetMapping("/search") PropertySearchResult search(
+            @RequestParam(required=false) BigDecimal priceMin, @RequestParam(required=false) BigDecimal priceMax,
+            @RequestParam(required=false) Integer beds, @RequestParam(required=false) Integer baths,
+            @RequestParam(required=false) String propertyType, @RequestParam(required=false) Integer squareFeetMin,
+            @RequestParam(required=false) Integer squareFeetMax, @RequestParam(required=false) String amenities,
+            @RequestParam(required=false) java.time.LocalDate availableFrom,
+            @RequestParam(required=false) Double latitude, @RequestParam(required=false) Double longitude,
+            @RequestParam(required=false) String city, @RequestParam(required=false) String state,
+            @RequestParam(required=false) String location,
+            @RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="20") int size,
+            @RequestParam(defaultValue="newest") String sort) {
+        return properties.search(priceMin, priceMax, beds, baths, propertyType, squareFeetMin, squareFeetMax,
+                amenities, availableFrom, latitude, longitude, city, state, location, page, size, sort);
+    }
+
     @GetMapping("/{id}") PropertyView get(@PathVariable long id) { return reader.get(id); }
 
     @GetMapping("/{id}/nearby") NearbyPlacesResponseDto nearby(@PathVariable long id) {
@@ -47,7 +62,8 @@ public class PropertyController {
     @PutMapping(path="/{id}", consumes = "multipart/form-data")
     @PreAuthorize("hasRole('MANAGER')")
     PropertyView update(@PathVariable long id, @AuthenticationPrincipal Jwt jwt,
-                        @RequestParam Map<String, String> fields) {
-        return properties.update(id, UUID.fromString(jwt.getSubject()), fields);
+                        @RequestParam Map<String, String> fields,
+                        @RequestParam(name="photos", required=false) List<MultipartFile> photos) {
+        return properties.update(id, UUID.fromString(jwt.getSubject()), fields, photos);
     }
 }

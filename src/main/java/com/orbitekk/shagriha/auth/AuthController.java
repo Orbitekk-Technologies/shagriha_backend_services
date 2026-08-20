@@ -45,6 +45,20 @@ public class AuthController {
         AppUser user = users.findByUsernameIgnoreCaseOrEmailIgnoreCase(request.login(), request.login()).orElseThrow();
         return response(user);
     }
+    @PostMapping("/reset-password") @Transactional
+    public AuthResponse resetPassword(@Valid @RequestBody ResetPasswordRequest request) {
+        if (!request.password().equals(request.confirmPassword())) {
+            throw new IllegalArgumentException("Passwords do not match");
+        }
+        AppUser user = users.findByEmailIgnoreCase(request.email().trim().toLowerCase())
+                .orElseThrow(() -> new IllegalArgumentException("No account was found for that email"));
+        if (user.getProvider() != AuthProvider.LOCAL) {
+            throw new IllegalArgumentException("This account uses Google sign-in");
+        }
+        user.changePassword(passwords.encode(request.password()));
+        users.save(user);
+        return response(user);
+    }
     @GetMapping("/me")
     public Map<String, Object> me(@org.springframework.security.core.annotation.AuthenticationPrincipal Jwt jwt) {
         UUID id = UUID.fromString(jwt.getSubject());
@@ -80,6 +94,8 @@ public class AuthController {
     public record SignupRequest(@Email @NotBlank @Size(max=80) String email,
             @Size(min=10,max=100) String password, @NotBlank String confirmPassword) {}
     public record LoginRequest(@NotBlank String login, @NotBlank String password) {}
+    public record ResetPasswordRequest(@Email @NotBlank @Size(max=80) String email,
+            @Size(min=10,max=100) String password, @NotBlank String confirmPassword) {}
     public record EnableManagerRequest(@AssertTrue boolean authorizedToList) {}
     public record AuthResponse(TokenService.AccessToken token, UUID userId, String username, UserRole role) {}
 }

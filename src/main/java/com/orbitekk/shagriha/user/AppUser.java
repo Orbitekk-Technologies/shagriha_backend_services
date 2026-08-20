@@ -34,6 +34,7 @@ public class AppUser {
     public String getUsername() { return username; }
     public String getEmail() { return email; }
     public String getPasswordHash() { return passwordHash; }
+    public void changePassword(String passwordHash) { this.passwordHash = passwordHash; }
     public UserRole getRole() { return role; }
     public void enableManagerRole() { this.role = UserRole.MANAGER; }
     public AuthProvider getProvider() { return provider; }

@@ -8,6 +8,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.UUID;
+import java.util.Map;
 
 @Component
 public class PropertyReader {
@@ -34,6 +35,14 @@ public class PropertyReader {
     public List<PropertyView> list() {
         return jdbc.sql(SELECT + " WHERE p.status='PUBLISHED' ORDER BY p.posted_at DESC")
                 .query(this::map).list();
+    }
+
+    public List<PropertyView> byIds(List<Long> ids) {
+        if (ids.isEmpty()) return List.of();
+        List<PropertyView> rows = jdbc.sql(SELECT + " WHERE p.id IN (:ids)")
+                .param("ids", ids).query(this::map).list();
+        Map<Long, PropertyView> byId = rows.stream().collect(java.util.stream.Collectors.toMap(PropertyView::id, p -> p));
+        return ids.stream().map(byId::get).filter(java.util.Objects::nonNull).toList();
     }
 
     public List<PropertyView> managedBy(UUID managerId) {
