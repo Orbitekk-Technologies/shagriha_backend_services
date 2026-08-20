@@ -6,9 +6,9 @@ spring:
       max-file-size: 10MB
       max-request-size: 50MB
   datasource:
-    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/shagriha}
-    username: ${DATABASE_USERNAME:shagriha}
-    password: ${DATABASE_PASSWORD:shagriha}
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5434/shagriha_dev}
+    username: ${DATABASE_USERNAME:orbitekk}
+    password: ${DATABASE_PASSWORD:Test123}
   jpa:
     open-in-view: false
     hibernate:

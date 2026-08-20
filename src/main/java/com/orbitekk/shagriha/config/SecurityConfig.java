@@ -50,8 +50,8 @@ public class SecurityConfig {
             .cors(cors -> {})
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/auth/signup", "/auth/login", "/auth/refresh", "/actuator/health/**").permitAll()
-                .requestMatchers(HttpMethod.GET, "/properties", "/properties/**").permitAll()
+                .requestMatchers("/auth/signup", "/auth/login", "/auth/reset-password", "/auth/refresh", "/actuator/health/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/properties", "/properties/search", "/properties/**").permitAll()
                 .requestMatchers("/managers/**").hasRole("MANAGER")
                 .requestMatchers("/tenants/**").hasAnyRole("TENANT", "MANAGER")
                 .anyRequest().authenticated())
