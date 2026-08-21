@@ -21,11 +21,7 @@ public class LeaseController {
         return leases.payments(id, subject(jwt), managerView(jwt, view));
     }
     private static UUID subject(Jwt jwt) { return UUID.fromString(jwt.getSubject()); }
-    private static boolean isManager(Jwt jwt) { return jwt.getClaimAsStringList("roles").contains("ROLE_MANAGER"); }
     static boolean managerView(Jwt jwt, String view) {
-        if ("manager".equalsIgnoreCase(view) && !isManager(jwt)) {
-            throw com.orbitekk.shagriha.common.ApiException.forbidden("Only managers can view managed leases");
-        }
-        return isManager(jwt) && !"tenant".equalsIgnoreCase(view);
+        return "manager".equalsIgnoreCase(view);
     }
 }

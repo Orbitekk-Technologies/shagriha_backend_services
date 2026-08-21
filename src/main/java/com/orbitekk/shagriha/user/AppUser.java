@@ -26,7 +26,7 @@ public class AppUser {
     public static AppUser google(UUID id, String username, String email, String providerSubject) {
         AppUser user = new AppUser();
         user.id = id; user.username = username; user.email = email; user.passwordHash = null;
-        user.role = UserRole.MANAGER; user.provider = AuthProvider.GOOGLE;
+        user.role = UserRole.USER; user.provider = AuthProvider.GOOGLE;
         user.providerSubject = providerSubject;
         return user;
     }
@@ -36,7 +36,6 @@ public class AppUser {
     public String getPasswordHash() { return passwordHash; }
     public void changePassword(String passwordHash) { this.passwordHash = passwordHash; }
     public UserRole getRole() { return role; }
-    public void enableManagerRole() { this.role = UserRole.MANAGER; }
     public AuthProvider getProvider() { return provider; }
     public String getProviderSubject() { return providerSubject; }
     public boolean isEnabled() { return enabled; }

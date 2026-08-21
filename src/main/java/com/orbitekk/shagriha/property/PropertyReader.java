@@ -16,12 +16,12 @@ public class PropertyReader {
         SELECT p.*, l.address_line1, l.address_line2, l.city, l.state_name, l.state_code,
                l.country_name, l.country_code, l.postal_code, l.formatted_address, l.mapbox_feature_id,
                ST_X(l.coordinates::geometry) longitude, ST_Y(l.coordinates::geometry) latitude,
-               mp.id manager_profile_id, mp.name manager_name, mp.phone_number manager_phone,
-               mp.image_url manager_image, u.email manager_email
+               up.id manager_profile_id, up.name manager_name, up.phone_number manager_phone,
+               up.image_url manager_image, u.email manager_email
         FROM properties p
         JOIN locations l ON l.id=p.location_id
         JOIN users u ON u.id=p.manager_user_id
-        JOIN manager_profiles mp ON mp.user_id=u.id
+        JOIN user_profiles up ON up.user_id=u.id
         """;
     private final JdbcClient jdbc;
 

@@ -23,7 +23,7 @@ public class TokenService {
         Instant now = Instant.now();
         var claims = JwtClaimsSet.builder().issuer(issuer).issuedAt(now).expiresAt(now.plus(ttl))
                 .subject(user.getId().toString()).claim("username", user.getUsername())
-                .claim("email", user.getEmail()).claim("roles", List.of("ROLE_MANAGER", "ROLE_TENANT")).build();
+                .claim("email", user.getEmail()).claim("roles", List.of("ROLE_USER")).build();
         var headers = JwsHeader.with(SignatureAlgorithm.RS256).build();
         String token = encoder.encode(JwtEncoderParameters.from(headers, claims)).getTokenValue();
         return new AccessToken(token, "Bearer", ttl.toSeconds());
