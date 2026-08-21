@@ -19,6 +19,7 @@ spring:
   flyway:
     enabled: true
 server:
+  forward-headers-strategy: framework
   port: ${PORT:8080}
   servlet:
     context-path: /api/v1
