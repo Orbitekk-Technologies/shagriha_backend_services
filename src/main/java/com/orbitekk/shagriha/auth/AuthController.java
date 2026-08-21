@@ -32,10 +32,8 @@ public class AuthController {
             throw new IllegalArgumentException("Email is already registered");
         }
         AppUser user = users.saveAndFlush(new AppUser(UUID.randomUUID(), email, email,
-                passwords.encode(request.password()), UserRole.MANAGER));
-        jdbc.sql("INSERT INTO tenant_profiles (user_id, name) VALUES (:userId, :name)")
-                .param("userId", user.getId()).param("name", email).update();
-        jdbc.sql("INSERT INTO manager_profiles (user_id, name) VALUES (:userId, :name)")
+                passwords.encode(request.password()), UserRole.USER));
+        jdbc.sql("INSERT INTO user_profiles (user_id, name) VALUES (:userId, :name)")
                 .param("userId", user.getId()).param("name", email).update();
         return response(user);
     }
@@ -63,7 +61,7 @@ public class AuthController {
     public Map<String, Object> me(@org.springframework.security.core.annotation.AuthenticationPrincipal Jwt jwt) {
         UUID id = UUID.fromString(jwt.getSubject());
         AppUser user = users.findById(id).orElseThrow();
-        String table = "manager_profiles";
+        String table = "user_profiles";
         Map<String, Object> profile = jdbc.sql("SELECT p.id, p.user_id AS \"userId\", p.name, u.email, p.phone_number AS \"phoneNumber\", p.image_url AS image FROM " + table + " p JOIN users u ON u.id=p.user_id WHERE p.user_id=:id")
                 .param("id", id).query().singleRow();
         return Map.of("authInfo", Map.of("userId", id, "username", user.getUsername()),
@@ -78,16 +76,8 @@ public class AuthController {
 
         UUID id = UUID.fromString(jwt.getSubject());
         AppUser user = users.findById(id).orElseThrow();
-        Integer managerProfiles = jdbc.sql("SELECT count(*) FROM manager_profiles WHERE user_id=:id")
-                .param("id", id).query(Integer.class).single();
-        if (managerProfiles == 0) {
-            String name = jdbc.sql("SELECT name FROM tenant_profiles WHERE user_id=:id")
-                    .param("id", id).query(String.class).optional().orElse(user.getUsername());
-            jdbc.sql("INSERT INTO manager_profiles (user_id, name) VALUES (:id, :name)")
-                    .param("id", id).param("name", name).update();
-        }
-        user.enableManagerRole();
-        users.save(user);
+        // Kept as a compatibility endpoint for older clients. Every account can
+        // already list properties; there is no role transition to perform.
         return response(user);
     }
     private AuthResponse response(AppUser user) { return new AuthResponse(tokens.issue(user), user.getId(), user.getUsername(), user.getRole()); }

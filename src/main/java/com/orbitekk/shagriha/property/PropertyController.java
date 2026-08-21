@@ -2,7 +2,6 @@ package com.orbitekk.shagriha.property;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
-import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -53,14 +52,12 @@ public class PropertyController {
     }
 
     @PostMapping(consumes = "multipart/form-data") @ResponseStatus(HttpStatus.CREATED)
-    @PreAuthorize("hasRole('MANAGER')")
     PropertyView create(@AuthenticationPrincipal Jwt jwt, @RequestParam Map<String, String> fields,
                         @RequestParam(name="photos", required=false) List<MultipartFile> photos) {
         return properties.create(UUID.fromString(jwt.getSubject()), fields, photos);
     }
 
     @PutMapping(path="/{id}", consumes = "multipart/form-data")
-    @PreAuthorize("hasRole('MANAGER')")
     PropertyView update(@PathVariable long id, @AuthenticationPrincipal Jwt jwt,
                         @RequestParam Map<String, String> fields,
                         @RequestParam(name="photos", required=false) List<MultipartFile> photos) {
