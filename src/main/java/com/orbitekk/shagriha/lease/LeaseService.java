@@ -54,7 +54,7 @@ public class LeaseService {
 
     private LeaseView view(long id, long propertyId, UUID tenantId, LocalDate start, LocalDate end,
                            BigDecimal rent, BigDecimal deposit) {
-        var tenant = jdbc.sql("SELECT tp.id,tp.user_id,tp.name,u.email,tp.phone_number,tp.image_url FROM tenant_profiles tp JOIN users u ON u.id=tp.user_id WHERE tp.user_id=:id")
+        var tenant = jdbc.sql("SELECT p.id,p.user_id,p.name,u.email,p.phone_number,p.image_url FROM user_profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=:id")
                 .param("id", tenantId).query((rs, n) -> new LeaseView.TenantSummary(rs.getLong("id"),
                         rs.getObject("user_id", UUID.class), rs.getString("name"), rs.getString("email"),
                         rs.getString("phone_number"), rs.getString("image_url"))).single();

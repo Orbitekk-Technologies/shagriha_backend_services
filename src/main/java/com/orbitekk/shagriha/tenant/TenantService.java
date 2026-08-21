@@ -25,11 +25,11 @@ public class TenantService {
     @Transactional
     public TenantView update(UUID userId, UpdateTenantRequest request) {
         if (request.email() != null) {
-            int changed = jdbc.sql("UPDATE users SET email=:email, updated_at=now() WHERE id=:id AND NOT EXISTS (SELECT 1 FROM users WHERE lower(email)=lower(:email) AND id<>:id)")
+            int changed = jdbc.sql("UPDATE users SET email=:email, username=:email, updated_at=now() WHERE id=:id AND NOT EXISTS (SELECT 1 FROM users WHERE (lower(email)=lower(:email) OR lower(username)=lower(:email)) AND id<>:id)")
                     .param("email", request.email().trim().toLowerCase()).param("id", userId).update();
             if (changed == 0) throw ApiException.conflict("Email is already registered");
         }
-        jdbc.sql("UPDATE tenant_profiles SET name=COALESCE(:name,name), phone_number=COALESCE(:phone,phone_number), image_url=COALESCE(:image,image_url) WHERE user_id=:id")
+        jdbc.sql("UPDATE user_profiles SET name=COALESCE(:name,name), phone_number=COALESCE(:phone,phone_number), image_url=COALESCE(:image,image_url) WHERE user_id=:id")
                 .param("name", trim(request.name())).param("phone", trim(request.phoneNumber()))
                 .param("image", trim(request.image())).param("id", userId).update();
         return get(userId);
@@ -55,7 +55,7 @@ public class TenantService {
     public List<PropertyView> residences(UUID userId) { row(userId); return properties.currentResidences(userId); }
 
     private TenantRow row(UUID userId) {
-        return jdbc.sql("SELECT tp.id,tp.user_id,tp.name,u.email,tp.phone_number,tp.image_url FROM tenant_profiles tp JOIN users u ON u.id=tp.user_id WHERE tp.user_id=:id")
+        return jdbc.sql("SELECT p.id,p.user_id,p.name,u.email,p.phone_number,p.image_url FROM user_profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=:id")
                 .param("id", userId).query((rs, n) -> new TenantRow(rs.getLong("id"), rs.getObject("user_id", UUID.class),
                         rs.getString("name"), rs.getString("email"), rs.getString("phone_number"), rs.getString("image_url")))
                 .optional().orElseThrow(() -> ApiException.notFound("Tenant not found"));

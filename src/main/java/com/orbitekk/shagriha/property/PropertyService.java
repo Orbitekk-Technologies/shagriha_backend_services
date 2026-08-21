@@ -224,9 +224,9 @@ public class PropertyService {
     }
 
     private void requireManager(UUID managerId) {
-        boolean exists = jdbc.sql("SELECT EXISTS(SELECT 1 FROM manager_profiles WHERE user_id=:id)")
+        boolean exists = jdbc.sql("SELECT EXISTS(SELECT 1 FROM user_profiles WHERE user_id=:id)")
                 .param("id", managerId).query(Boolean.class).single();
-        if (!exists) throw ApiException.notFound("Manager not found");
+        if (!exists) throw ApiException.notFound("User not found");
     }
 
     private void insertValues(long propertyId, String table, String column, Set<String> values) {

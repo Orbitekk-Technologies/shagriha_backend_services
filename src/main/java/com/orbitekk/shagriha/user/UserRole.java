@@ -1,3 +1,3 @@
 package com.orbitekk.shagriha.user;
 
-public enum UserRole { TENANT, MANAGER }
+public enum UserRole { USER }

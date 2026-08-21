@@ -25,16 +25,11 @@ public class RentalApplicationController {
     }
     @PutMapping("/{id}/status") RentalApplicationService.ApplicationView status(@AuthenticationPrincipal Jwt jwt,
             @PathVariable long id, @Valid @RequestBody StatusRequest request) {
-        if (!isManager(jwt)) throw com.orbitekk.shagriha.common.ApiException.forbidden("Only managers can update applications");
         return applications.updateStatus(subject(jwt), id, request.status());
     }
     private static UUID subject(Jwt jwt) { return UUID.fromString(jwt.getSubject()); }
-    private static boolean isManager(Jwt jwt) { return jwt.getClaimAsStringList("roles").contains("ROLE_MANAGER"); }
     static boolean managerView(Jwt jwt, String view) {
-        if ("manager".equalsIgnoreCase(view) && !isManager(jwt)) {
-            throw com.orbitekk.shagriha.common.ApiException.forbidden("Only managers can view listing applications");
-        }
-        return isManager(jwt) && !"tenant".equalsIgnoreCase(view);
+        return "manager".equalsIgnoreCase(view);
     }
     public record StatusRequest(@NotBlank String status) {}
 }

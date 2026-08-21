@@ -39,9 +39,13 @@ public class GoogleOAuthSuccessHandler implements AuthenticationSuccessHandler {
         String email = principal.getAttribute("email");
         String name = principal.getAttribute("name");
         if (subject == null || email == null) throw new ServletException("Google account is missing required identity claims");
+        if (!Boolean.TRUE.equals(principal.<Boolean>getAttribute("email_verified"))) {
+            throw new ServletException("Google account email is not verified");
+        }
+        String normalizedEmail = email.trim().toLowerCase();
 
         AppUser user = users.findByProviderAndProviderSubject(AuthProvider.GOOGLE, subject)
-                .orElseGet(() -> createUser(subject, email, name));
+                .orElseGet(() -> createUser(subject, normalizedEmail, name));
         TokenService.AccessToken token = tokens.issue(user);
         String fragment = UriComponentsBuilder.newInstance()
                 .queryParam("access_token", token.accessToken())
@@ -53,15 +57,10 @@ public class GoogleOAuthSuccessHandler implements AuthenticationSuccessHandler {
     private AppUser createUser(String subject, String email, String displayName) {
         AppUser existing = users.findByUsernameIgnoreCaseOrEmailIgnoreCase(email, email).orElse(null);
         if (existing != null) return existing;
-        String base = email.substring(0, email.indexOf('@')).replaceAll("[^A-Za-z0-9._-]", "");
-        if (base.isBlank()) base = "google-user";
-        String username = base;
-        for (int suffix = 1; users.existsByUsernameIgnoreCase(username); suffix++) username = base + suffix;
-        AppUser user = users.saveAndFlush(AppUser.google(UUID.randomUUID(), username, email.toLowerCase(), subject));
+        String username = email;
+        AppUser user = users.saveAndFlush(AppUser.google(UUID.randomUUID(), username, email, subject));
         String profileName = displayName == null || displayName.isBlank() ? username : displayName;
-        jdbc.sql("INSERT INTO tenant_profiles (user_id, name) VALUES (:id, :name)")
-                .param("id", user.getId()).param("name", profileName).update();
-        jdbc.sql("INSERT INTO manager_profiles (user_id, name) VALUES (:id, :name)")
+        jdbc.sql("INSERT INTO user_profiles (user_id, name) VALUES (:id, :name)")
                 .param("id", user.getId()).param("name", profileName).update();
         return user;
     }
