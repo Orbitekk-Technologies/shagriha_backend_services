@@ -1,16 +1,19 @@
 services:
   postgres:
     image: postgis/postgis:17-3.5
+    # The official PostGIS tag is currently amd64-only. Docker Desktop uses
+    # emulation on Apple Silicon for local development.
+    platform: linux/amd64
     environment:
-      POSTGRES_DB: shagriha
-      POSTGRES_USER: shagriha
-      POSTGRES_PASSWORD: shagriha
+      POSTGRES_DB: shagriha_dev
+      POSTGRES_USER: orbitekk
+      POSTGRES_PASSWORD: Test123
     ports:
-      - "5432:5432"
+      - "5434:5432"
     volumes:
       - shagriha_postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U shagriha -d shagriha"]
+      test: ["CMD-SHELL", "pg_isready -U orbitekk -d shagriha_dev"]
       interval: 5s
       timeout: 5s
       retries: 10

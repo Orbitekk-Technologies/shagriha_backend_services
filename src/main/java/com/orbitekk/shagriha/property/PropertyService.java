@@ -150,6 +150,12 @@ public class PropertyService {
         int beds = integer(fields, "beds", 0, 100);
         int baths = integer(fields, "baths", 0, 100);
         int squareFeet = integer(fields, "squareFeet", 1, Integer.MAX_VALUE);
+        String stayType = oneOf(required(fields, "stayType"), "PayingGuest", "WholeUnit");
+        String bathType = oneOf(required(fields, "bathType"), "Private", "SharedBath");
+        String genderPreference = oneOf(stringSet(fields.get("genderPreference")).stream().findFirst().orElse("NoPreference"),
+                "Male", "Female", "NoPreference");
+        boolean petsAllowed = bool(fields.get("isPetsAllowed"));
+        boolean parkingIncluded = bool(fields.get("isParkingIncluded"));
         double longitude = requiredCoordinate(fields, "longitude", -180, 180);
         double latitude = requiredCoordinate(fields, "latitude", -90, 90);
 
@@ -168,14 +174,22 @@ public class PropertyService {
                 INSERT INTO properties(manager_user_id,location_id,name,description,stay_type,bath_type,gender_preference,
                     price_per_month,security_deposit,application_fee,pets_allowed,parking_included,beds,baths,square_feet,
                     property_type,available_from,status)
-                VALUES(:managerId,:locationId,:name,:description,'ENTIRE_PLACE','PRIVATE','ANY',:price,:deposit,:fee,
+                VALUES(:managerId,:locationId,:name,:description,:stayType,:bathType,:genderPreference,:price,:deposit,:fee,
                     :pets,:parking,:beds,:baths,:squareFeet,:propertyType,:availableFrom,'PUBLISHED') RETURNING id
                 """).param("managerId", managerId).param("locationId", locationId).param("name", name)
                 .param("description", description).param("price", price).param("deposit", deposit).param("fee", fee)
-                .param("pets", bool(fields.get("isPetsAllowed"))).param("parking", bool(fields.get("isParkingIncluded")))
-                .param("beds", beds).param("baths", baths).param("squareFeet", squareFeet)
+                .param("stayType", stayType).param("bathType", bathType).param("genderPreference", genderPreference)
+                .param("pets", petsAllowed).param("parking", parkingIncluded)
+                .param("beds", stayType.equals("PayingGuest") ? 0 : beds).param("baths", baths).param("squareFeet", squareFeet)
                 .param("propertyType", required(fields, "propertyType"))
                 .param("availableFrom", date(fields.get("availableFrom"))).query(Long.class).single();
+        jdbc.sql("""
+                UPDATE properties SET pet_count=:petCount,pet_fee=:petFee,parking_fee=:parkingFee,smoking_included=:smoking
+                WHERE id=:id
+                """).param("petCount", petsAllowed ? optionalInteger(fields, "petCount", 0, 100) : null)
+                .param("petFee", petsAllowed ? optionalDecimal(fields, "petFee", null) : null)
+                .param("parkingFee", parkingIncluded ? optionalDecimal(fields, "parkingFee", null) : null)
+                .param("smoking", bool(fields.get("smokingIncluded"))).param("id", propertyId).update();
 
         insertValues(propertyId, "property_amenities", "amenity", stringSet(fields.get("amenities")));
         insertValues(propertyId, "property_highlights", "highlight", stringSet(fields.get("highlights")));
@@ -206,13 +220,22 @@ public class PropertyService {
                 .param("formattedAddress", optional(fields, "formattedAddress")).param("mapboxFeatureId", optional(fields, "mapboxFeatureId"))
                 .param("longitude", longitude).param("latitude", latitude).param("id", propertyId).update();
         jdbc.sql("""
-                UPDATE properties SET name=:name,description=:description,price_per_month=:price,
-                    security_deposit=:deposit,pets_allowed=:pets,parking_included=:parking,beds=:beds,baths=:baths,
+                UPDATE properties SET name=:name,description=:description,stay_type=:stayType,bath_type=:bathType,
+                    gender_preference=:genderPreference,price_per_month=:price,
+                    security_deposit=:deposit,pets_allowed=:pets,parking_included=:parking,pet_count=:petCount,
+                    pet_fee=:petFee,parking_fee=:parkingFee,smoking_included=:smoking,beds=:beds,baths=:baths,
                     square_feet=:squareFeet,property_type=:propertyType WHERE id=:id
                 """).param("name", required(fields, "name")).param("description", required(fields, "description"))
                 .param("price", decimal(fields, "pricePerMonth", false)).param("deposit", decimal(fields, "securityDeposit", true))
                 .param("pets", bool(fields.get("isPetsAllowed"))).param("parking", bool(fields.get("isParkingIncluded")))
-                .param("beds", integer(fields, "beds", 0, 100)).param("baths", integer(fields, "baths", 0, 100))
+                .param("petCount", bool(fields.get("isPetsAllowed")) ? optionalInteger(fields, "petCount", 0, 100) : null)
+                .param("petFee", bool(fields.get("isPetsAllowed")) ? optionalDecimal(fields, "petFee", null) : null)
+                .param("parkingFee", bool(fields.get("isParkingIncluded")) ? optionalDecimal(fields, "parkingFee", null) : null)
+                .param("smoking", bool(fields.get("smokingIncluded")))
+                .param("stayType", oneOf(required(fields, "stayType"), "PayingGuest", "WholeUnit"))
+                .param("bathType", oneOf(required(fields, "bathType"), "Private", "SharedBath"))
+                .param("genderPreference", oneOf(stringSet(fields.get("genderPreference")).stream().findFirst().orElse("NoPreference"), "Male", "Female", "NoPreference"))
+                .param("beds", "PayingGuest".equals(fields.get("stayType")) ? 0 : integer(fields, "beds", 0, 100)).param("baths", integer(fields, "baths", 0, 100))
                 .param("squareFeet", integer(fields, "squareFeet", 1, Integer.MAX_VALUE))
                 .param("propertyType", required(fields, "propertyType")).param("id", propertyId).update();
         jdbc.sql("DELETE FROM property_amenities WHERE property_id=:id").param("id", propertyId).update();
@@ -311,6 +334,19 @@ public class PropertyService {
             if (value < min || value > max) throw new NumberFormatException();
             return value;
         } catch (NumberFormatException ex) { throw new IllegalArgumentException(key + " is invalid"); }
+    }
+    private static Integer optionalInteger(Map<String, String> fields, String key, int min, int max) {
+        String value = fields.get(key);
+        if (value == null || value.isBlank()) return null;
+        try {
+            int parsed = Integer.parseInt(value);
+            if (parsed < min || parsed > max) throw new NumberFormatException();
+            return parsed;
+        } catch (NumberFormatException ex) { throw new IllegalArgumentException(key + " must be a whole number"); }
+    }
+    private static String oneOf(String value, String... allowed) {
+        if (Arrays.asList(allowed).contains(value)) return value;
+        throw new IllegalArgumentException("Invalid option: " + value);
     }
     private static double requiredCoordinate(Map<String, String> fields, String key, double min, double max) {
         try {
