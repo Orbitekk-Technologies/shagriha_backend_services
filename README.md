@@ -63,6 +63,10 @@ docker compose up -d
 ./mvnw spring-boot:run
 ```
 
+For local development, Spring automatically imports the optional `.env.local`
+file from the backend project directory. `.env.example` is documentation only
+and is never used as runtime configuration.
+
 The API is at `http://localhost:8080/api/v1`; health is at
 `http://localhost:8080/api/v1/actuator/health`.
 
@@ -82,6 +86,8 @@ them to Git.
 | `SPRING_PROFILES_ACTIVE` | For Google login | Set to `oauth` |
 | `GOOGLE_CLIENT_ID` | For Google login | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | For Google login | Google OAuth secret |
+| `GOOGLE_REDIRECT_URI` | For Google login | Exact callback registered with Google, e.g. `https://api.shagriha.com/api/v1/login/oauth2/code/google` |
+| `SESSION_COOKIE_SECURE` | Production OAuth | Set to `true` when the public API uses HTTPS |
 
 The current code generates a new in-memory RSA signing key every time the API
 starts. A restart therefore invalidates all existing access tokens. This is
@@ -119,7 +125,24 @@ systemd-managed executable JAR. Adjust usernames and paths for the server.
    /usr/bin/java -jar /opt/shagriha/backend/app.jar
    ```
 
-6. Configure systemd with `Restart=on-failure`, then proxy only through Nginx.
+6. Configure systemd with `Restart=on-failure`, then proxy only through Nginx
+   or Apache. Preserve the public host and HTTPS scheme. For Apache, include:
+
+   ```apache
+   ProxyPreserveHost On
+   RequestHeader set X-Forwarded-Proto "https"
+   RequestHeader set X-Forwarded-Port "443"
+   ```
+
+   Ensure the Apache `headers`, `proxy`, and `proxy_http` modules are enabled.
+   For production Google login, set:
+
+   ```text
+   SPRING_PROFILES_ACTIVE=oauth
+   GOOGLE_REDIRECT_URI=https://api.shagriha.com/api/v1/login/oauth2/code/google
+   SESSION_COOKIE_SECURE=true
+   ```
+
    Route the API hostname (for example `api-sandbox.example.com`) to
    `http://127.0.0.1:8080`. Preserve `Host`, `X-Real-IP`,
    `X-Forwarded-For`, and `X-Forwarded-Proto` headers.
@@ -154,6 +177,16 @@ Register the public backend callback with Google when OAuth is enabled:
 ```text
 https://api-sandbox.example.com/api/v1/login/oauth2/code/google
 ```
+
+Register HTTPS only in production. After deployment, confirm that the login
+endpoint returns a Google authorization URL containing the HTTPS callback:
+
+```bash
+curl -sSI https://api.shagriha.com/api/v1/oauth2/authorization/google
+```
+
+The `Location` response must contain an encoded
+`redirect_uri=https://api.shagriha.com/api/v1/login/oauth2/code/google`.
 
 ## Verification and operations
 

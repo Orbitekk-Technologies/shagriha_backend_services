@@ -9,5 +9,12 @@ spring:
           google:
             client-id: ${GOOGLE_CLIENT_ID}
             client-secret: ${GOOGLE_CLIENT_SECRET}
-            redirect-uri: ${GOOGLE_REDIRECT_URI:{baseUrl}/login/oauth2/code/{registrationId}}
+            # Keep this explicit in every OAuth-enabled environment. Deriving
+            # the URL from proxy headers can accidentally downgrade HTTPS to
+            # HTTP when a reverse proxy is misconfigured.
+            redirect-uri: ${GOOGLE_REDIRECT_URI}
             scope: openid,profile,email
+        provider:
+          google:
+            # Always let the user choose which signed-in Google account to use.
+            authorization-uri: https://accounts.google.com/o/oauth2/v2/auth?prompt=select_account
