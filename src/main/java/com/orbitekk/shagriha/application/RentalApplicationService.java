@@ -95,7 +95,8 @@ public class RentalApplicationService {
 
     public record CreateRequest(@NotNull @Positive Long propertyId, @NotBlank @Size(max=160) String name,
                                 @NotBlank @Email @Size(max=255) String email,
-                                @NotBlank @Size(max=40) String phoneNumber, @Size(max=4000) String message) {}
+                                @NotBlank @Pattern(regexp="\\d{10}", message="phoneNumber must contain exactly 10 digits") String phoneNumber,
+                                @Size(max=4000) String message) {}
     public record ApplicationView(long id, Instant applicationDate, String status, long propertyId,
                                   UUID tenantUserId, String name, String email, String phoneNumber,
                                   String message, Long leaseId, PropertyView property,

@@ -51,7 +51,10 @@ public class PropertyService {
 
     public PropertySearchResult search(BigDecimal priceMin, BigDecimal priceMax, Integer beds, Integer baths,
                                        String propertyType, Integer squareFeetMin, Integer squareFeetMax,
-                                       String amenities, LocalDate availableFrom, Double latitude, Double longitude,
+                                       String amenities, String stayType, String bathType,
+                                       Boolean petsAllowed, Boolean parkingIncluded, Boolean smokingIncluded,
+                                       Integer petCount, BigDecimal petFeeMax, BigDecimal parkingFeeMax,
+                                       LocalDate availableFrom, Double latitude, Double longitude,
                                        String city, String state, String location, int page, int size, String sort) {
         if (page < 0) throw new IllegalArgumentException("page must be zero or greater");
         if (size < 1 || size > 100) throw new IllegalArgumentException("size must be between 1 and 100");
@@ -90,6 +93,15 @@ public class PropertyService {
                 AND (CAST(:squareFeetMin AS integer) IS NULL OR p.square_feet >= :squareFeetMin)
                 AND (CAST(:squareFeetMax AS integer) IS NULL OR p.square_feet <= :squareFeetMax)
                 AND (CAST(:propertyType AS varchar) IS NULL OR lower(p.property_type)=lower(:propertyType))
+                AND (CAST(:stayType AS varchar) IS NULL OR lower(p.stay_type)=lower(:stayType))
+                AND (CAST(:bathType AS varchar) IS NULL OR lower(p.bath_type)=lower(:bathType))
+                /* Gender preference filtering is intentionally disabled for now. */
+                AND (CAST(:petsAllowed AS boolean) IS NULL OR p.pets_allowed=:petsAllowed)
+                AND (CAST(:parkingIncluded AS boolean) IS NULL OR p.parking_included=:parkingIncluded)
+                AND (CAST(:smokingIncluded AS boolean) IS NULL OR p.smoking_included=:smokingIncluded)
+                AND (CAST(:petCount AS integer) IS NULL OR p.pet_count >= :petCount)
+                AND (CAST(:petFeeMax AS numeric) IS NULL OR COALESCE(p.pet_fee,0) <= :petFeeMax)
+                AND (CAST(:parkingFeeMax AS numeric) IS NULL OR COALESCE(p.parking_fee,0) <= :parkingFeeMax)
                 AND (CAST(:availableFrom AS date) IS NULL OR p.available_from IS NULL OR p.available_from <= :availableFrom)
                 AND (:amenityCount=0 OR (SELECT count(DISTINCT pa.amenity) FROM property_amenities pa
                      WHERE pa.property_id=p.id AND pa.amenity IN (:amenities))=:amenityCount)
@@ -105,6 +117,11 @@ public class PropertyService {
                 .param("priceMin", priceMin).param("priceMax", priceMax).param("beds", beds).param("baths", baths)
                 .param("squareFeetMin", squareFeetMin).param("squareFeetMax", squareFeetMax)
                 .param("propertyType", propertyType == null || propertyType.equalsIgnoreCase("any") ? null : propertyType)
+                .param("stayType", anyToNull(stayType))
+                .param("bathType", "PayingGuest".equalsIgnoreCase(anyToNull(stayType)) ? anyToNull(bathType) : null)
+                .param("petsAllowed", petsAllowed).param("parkingIncluded", parkingIncluded)
+                .param("smokingIncluded", smokingIncluded)
+                .param("petCount", petCount).param("petFeeMax", petFeeMax).param("parkingFeeMax", parkingFeeMax)
                 .param("availableFrom", availableFrom).param("amenityCount", requiredAmenities.size())
                 .param("amenities", requiredAmenities.isEmpty() ? Set.of("__none__") : requiredAmenities)
                 .param("size", size).param("offset", (long) page * size);
@@ -131,11 +148,16 @@ public class PropertyService {
 
     private record SearchRow(long id, int rank, long total) {}
 
+    private static String anyToNull(String value) {
+        return value == null || value.isBlank() || value.equalsIgnoreCase("any") ? null : value.trim();
+    }
+
     @Transactional
     public PropertyView create(UUID managerId, Map<String, String> fields, List<MultipartFile> photos) {
         requireManager(managerId);
         String name = required(fields, "name");
         String description = required(fields, "description");
+        requireMinimumLength(description, "description", 500);
         String address = required(fields, "addressLine1");
         String addressLine2 = optional(fields, "addressLine2");
         String city = required(fields, "city");
@@ -147,13 +169,13 @@ public class PropertyService {
         BigDecimal price = decimal(fields, "pricePerMonth", false);
         BigDecimal deposit = decimal(fields, "securityDeposit", true);
         BigDecimal fee = optionalDecimal(fields, "applicationFee", BigDecimal.ZERO);
-        int beds = integer(fields, "beds", 0, 100);
-        int baths = integer(fields, "baths", 0, 100);
+        int beds = integer(fields, "beds", 1, 100);
+        int baths = integer(fields, "baths", 1, 100);
         int squareFeet = integer(fields, "squareFeet", 1, Integer.MAX_VALUE);
         String stayType = oneOf(required(fields, "stayType"), "PayingGuest", "WholeUnit");
         String bathType = oneOf(required(fields, "bathType"), "Private", "SharedBath");
-        String genderPreference = oneOf(stringSet(fields.get("genderPreference")).stream().findFirst().orElse("NoPreference"),
-                "Male", "Female", "NoPreference");
+        // Gender preference is disabled. Preserve the legacy column with a neutral value.
+        String genderPreference = "NoPreference";
         boolean petsAllowed = bool(fields.get("isPetsAllowed"));
         boolean parkingIncluded = bool(fields.get("isParkingIncluded"));
         double longitude = requiredCoordinate(fields, "longitude", -180, 180);
@@ -180,7 +202,8 @@ public class PropertyService {
                 .param("description", description).param("price", price).param("deposit", deposit).param("fee", fee)
                 .param("stayType", stayType).param("bathType", bathType).param("genderPreference", genderPreference)
                 .param("pets", petsAllowed).param("parking", parkingIncluded)
-                .param("beds", stayType.equals("PayingGuest") ? 0 : beds).param("baths", baths).param("squareFeet", squareFeet)
+                .param("beds", stayType.equals("PayingGuest") ? 1 : beds)
+                .param("baths", stayType.equals("PayingGuest") ? 1 : baths).param("squareFeet", squareFeet)
                 .param("propertyType", required(fields, "propertyType"))
                 .param("availableFrom", date(fields.get("availableFrom"))).query(Long.class).single();
         jdbc.sql("""
@@ -207,6 +230,9 @@ public class PropertyService {
                 FROM locations l JOIN properties p ON p.location_id=l.id WHERE p.id=:id
                 """).param("longitude", longitude).param("latitude", latitude).param("id", propertyId)
                 .query(Boolean.class).single();
+        String stayType = oneOf(required(fields, "stayType"), "PayingGuest", "WholeUnit");
+        String description = required(fields, "description");
+        requireMinimumLength(description, "description", 500);
         jdbc.sql("""
                 UPDATE locations SET address_line1=:address,address_line2=:addressLine2,city=:city,
                     state_name=:stateName,state_code=:stateCode,country_name=:countryName,country_code=:countryCode,
@@ -225,17 +251,19 @@ public class PropertyService {
                     security_deposit=:deposit,pets_allowed=:pets,parking_included=:parking,pet_count=:petCount,
                     pet_fee=:petFee,parking_fee=:parkingFee,smoking_included=:smoking,beds=:beds,baths=:baths,
                     square_feet=:squareFeet,property_type=:propertyType WHERE id=:id
-                """).param("name", required(fields, "name")).param("description", required(fields, "description"))
+                """).param("name", required(fields, "name")).param("description", description)
                 .param("price", decimal(fields, "pricePerMonth", false)).param("deposit", decimal(fields, "securityDeposit", true))
                 .param("pets", bool(fields.get("isPetsAllowed"))).param("parking", bool(fields.get("isParkingIncluded")))
                 .param("petCount", bool(fields.get("isPetsAllowed")) ? optionalInteger(fields, "petCount", 0, 100) : null)
                 .param("petFee", bool(fields.get("isPetsAllowed")) ? optionalDecimal(fields, "petFee", null) : null)
                 .param("parkingFee", bool(fields.get("isParkingIncluded")) ? optionalDecimal(fields, "parkingFee", null) : null)
                 .param("smoking", bool(fields.get("smokingIncluded")))
-                .param("stayType", oneOf(required(fields, "stayType"), "PayingGuest", "WholeUnit"))
+                .param("stayType", stayType)
                 .param("bathType", oneOf(required(fields, "bathType"), "Private", "SharedBath"))
-                .param("genderPreference", oneOf(stringSet(fields.get("genderPreference")).stream().findFirst().orElse("NoPreference"), "Male", "Female", "NoPreference"))
-                .param("beds", "PayingGuest".equals(fields.get("stayType")) ? 0 : integer(fields, "beds", 0, 100)).param("baths", integer(fields, "baths", 0, 100))
+                // Gender preference is disabled. Preserve the legacy column with a neutral value.
+                .param("genderPreference", "NoPreference")
+                .param("beds", "PayingGuest".equals(stayType) ? 1 : integer(fields, "beds", 1, 100))
+                .param("baths", "PayingGuest".equals(stayType) ? 1 : integer(fields, "baths", 1, 100))
                 .param("squareFeet", integer(fields, "squareFeet", 1, Integer.MAX_VALUE))
                 .param("propertyType", required(fields, "propertyType")).param("id", propertyId).update();
         jdbc.sql("DELETE FROM property_amenities WHERE property_id=:id").param("id", propertyId).update();
@@ -309,6 +337,10 @@ public class PropertyService {
     private static String optional(Map<String, String> fields, String key) {
         String value = fields.get(key);
         return value == null || value.isBlank() ? null : value.trim();
+    }
+    private static void requireMinimumLength(String value, String field, int minimum) {
+        if (value.length() < minimum)
+            throw new IllegalArgumentException(field + " must contain at least " + minimum + " characters");
     }
     private static BigDecimal decimal(Map<String, String> fields, String key, boolean zeroAllowed) {
         try {

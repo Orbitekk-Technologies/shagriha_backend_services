@@ -13,7 +13,11 @@ import java.util.Map;
 @Component
 public class PropertyReader {
     private static final String SELECT = """
-        SELECT p.*, l.address_line1, l.address_line2, l.city, l.state_name, l.state_code,
+        SELECT p.*,
+               ARRAY(SELECT pp.url FROM property_photos pp WHERE pp.property_id=p.id ORDER BY pp.display_order) photo_urls,
+               ARRAY(SELECT pa.amenity FROM property_amenities pa WHERE pa.property_id=p.id ORDER BY pa.amenity) amenities,
+               ARRAY(SELECT ph.highlight FROM property_highlights ph WHERE ph.property_id=p.id ORDER BY ph.highlight) highlights,
+               l.address_line1, l.address_line2, l.city, l.state_name, l.state_code,
                l.country_name, l.country_code, l.postal_code, l.formatted_address, l.mapbox_feature_id,
                ST_X(l.coordinates::geometry) longitude, ST_Y(l.coordinates::geometry) latitude,
                up.id manager_profile_id, up.name manager_name, up.phone_number manager_phone,
@@ -68,12 +72,9 @@ public class PropertyReader {
 
     private PropertyView map(ResultSet rs, int rowNum) throws SQLException {
         long id = rs.getLong("id");
-        List<String> photos = jdbc.sql("SELECT url FROM property_photos WHERE property_id=:id ORDER BY display_order")
-                .param("id", id).query(String.class).list();
-        List<String> amenities = jdbc.sql("SELECT amenity FROM property_amenities WHERE property_id=:id ORDER BY amenity")
-                .param("id", id).query(String.class).list();
-        List<String> highlights = jdbc.sql("SELECT highlight FROM property_highlights WHERE property_id=:id ORDER BY highlight")
-                .param("id", id).query(String.class).list();
+        List<String> photos = stringArray(rs, "photo_urls");
+        List<String> amenities = stringArray(rs, "amenities");
+        List<String> highlights = stringArray(rs, "highlights");
         var location = new PropertyView.LocationView(rs.getLong("location_id"), rs.getString("address_line1"),
                 rs.getString("address_line1"), rs.getString("address_line2"), rs.getString("city"),
                 rs.getString("state_name"), rs.getString("state_name"), rs.getString("state_code"),
@@ -93,5 +94,10 @@ public class PropertyReader {
                 rs.getInt("baths"), rs.getInt("square_feet"), rs.getString("property_type"),
                 rs.getTimestamp("posted_at").toInstant(), 0, 0, rs.getLong("location_id"),
                 rs.getObject("manager_user_id", java.util.UUID.class), location, manager);
+    }
+
+    private static List<String> stringArray(ResultSet rs, String column) throws SQLException {
+        String[] values = (String[]) rs.getArray(column).getArray();
+        return List.of(values);
     }
 }
