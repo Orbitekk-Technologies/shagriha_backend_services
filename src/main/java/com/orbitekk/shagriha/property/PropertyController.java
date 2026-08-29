@@ -35,6 +35,12 @@ public class PropertyController {
             @RequestParam(required=false) Integer beds, @RequestParam(required=false) Integer baths,
             @RequestParam(required=false) String propertyType, @RequestParam(required=false) Integer squareFeetMin,
             @RequestParam(required=false) Integer squareFeetMax, @RequestParam(required=false) String amenities,
+            @RequestParam(required=false) String stayType, @RequestParam(required=false) String bathType,
+            // Gender preference filtering is intentionally disabled for now.
+            @RequestParam(required=false) Boolean petsAllowed, @RequestParam(required=false) Boolean parkingIncluded,
+            @RequestParam(required=false) Boolean smokingIncluded,
+            @RequestParam(required=false) Integer petCount, @RequestParam(required=false) BigDecimal petFeeMax,
+            @RequestParam(required=false) BigDecimal parkingFeeMax,
             @RequestParam(required=false) java.time.LocalDate availableFrom,
             @RequestParam(required=false) Double latitude, @RequestParam(required=false) Double longitude,
             @RequestParam(required=false) String city, @RequestParam(required=false) String state,
@@ -42,7 +48,8 @@ public class PropertyController {
             @RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="20") int size,
             @RequestParam(defaultValue="newest") String sort) {
         return properties.search(priceMin, priceMax, beds, baths, propertyType, squareFeetMin, squareFeetMax,
-                amenities, availableFrom, latitude, longitude, city, state, location, page, size, sort);
+                amenities, stayType, bathType, petsAllowed, parkingIncluded, smokingIncluded,
+                petCount, petFeeMax, parkingFeeMax, availableFrom, latitude, longitude, city, state, location, page, size, sort);
     }
 
     @GetMapping("/{id}") PropertyView get(@PathVariable long id) { return reader.get(id); }
