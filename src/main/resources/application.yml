@@ -40,8 +40,8 @@ app:
   frontend-url: ${FRONTEND_URL:http://localhost:3000}
   jwt:
     issuer: ${JWT_ISSUER:shagriha-api}
-    access-token-ttl: PT15M
-    refresh-token-ttl: P30D
+    access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:PT1H}
+    refresh-token-ttl: ${JWT_REFRESH_TOKEN_TTL:P30D}
 
 management:
   endpoints:
