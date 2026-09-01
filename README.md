@@ -82,6 +82,8 @@ them to Git.
 | `DATABASE_PASSWORD` | Yes | Strong DB password |
 | `FRONTEND_URL` | Yes | Exact public frontend origin, e.g. `https://sandbox.example.com` (no trailing slash) |
 | `JWT_ISSUER` | Recommended | Stable issuer such as `shagriha-sandbox-api` |
+| `JWT_ACCESS_TOKEN_TTL` | No | ISO-8601 access-token lifetime; defaults to `PT1H` |
+| `JWT_REFRESH_TOKEN_TTL` | No | Reserved refresh-token lifetime; defaults to `P30D` |
 | `PORT` | No | Defaults to `8080` |
 | `SPRING_PROFILES_ACTIVE` | For Google login | Set to `oauth` |
 | `GOOGLE_CLIENT_ID` | For Google login | Google OAuth client ID |
