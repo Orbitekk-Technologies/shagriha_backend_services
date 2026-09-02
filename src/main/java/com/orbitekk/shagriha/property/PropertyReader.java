@@ -90,7 +90,7 @@ public class PropertyReader {
                 rs.getBoolean("pets_allowed"), rs.getBoolean("parking_included"),
                 rs.getObject("pet_count", Integer.class), rs.getBigDecimal("pet_fee"), rs.getBigDecimal("parking_fee"),
                 rs.getBoolean("smoking_included"), rs.getString("stay_type"), rs.getString("bath_type"),
-                rs.getString("gender_preference"), rs.getInt("beds"),
+                rs.getInt("beds"),
                 rs.getInt("baths"), rs.getInt("square_feet"), rs.getString("property_type"),
                 rs.getTimestamp("posted_at").toInstant(), 0, 0, rs.getLong("location_id"),
                 rs.getObject("manager_user_id", java.util.UUID.class), location, manager);

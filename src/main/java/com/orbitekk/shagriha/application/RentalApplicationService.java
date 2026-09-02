@@ -93,7 +93,9 @@ public class RentalApplicationService {
         return status;
     }
 
-    public record CreateRequest(@NotNull @Positive Long propertyId, @NotBlank @Size(max=160) String name,
+    public record CreateRequest(@NotNull @Positive Long propertyId,
+                                @NotBlank @Size(max=160)
+                                @Pattern(regexp="^[\\p{L}][\\p{L}\\p{M}' -]*$", message="name can only contain letters, spaces, apostrophes, and hyphens") String name,
                                 @NotBlank @Email @Size(max=255) String email,
                                 @NotBlank @Pattern(regexp="\\d{10}", message="phoneNumber must contain exactly 10 digits") String phoneNumber,
                                 @Size(max=4000) String message) {}
