@@ -95,7 +95,6 @@ public class PropertyService {
                 AND (CAST(:propertyType AS varchar) IS NULL OR lower(p.property_type)=lower(:propertyType))
                 AND (CAST(:stayType AS varchar) IS NULL OR lower(p.stay_type)=lower(:stayType))
                 AND (CAST(:bathType AS varchar) IS NULL OR lower(p.bath_type)=lower(:bathType))
-                /* Gender preference filtering is intentionally disabled for now. */
                 AND (CAST(:petsAllowed AS boolean) IS NULL OR p.pets_allowed=:petsAllowed)
                 AND (CAST(:parkingIncluded AS boolean) IS NULL OR p.parking_included=:parkingIncluded)
                 AND (CAST(:smokingIncluded AS boolean) IS NULL OR p.smoking_included=:smokingIncluded)
@@ -157,7 +156,7 @@ public class PropertyService {
         requireManager(managerId);
         String name = required(fields, "name");
         String description = required(fields, "description");
-        requireMinimumLength(description, "description", 500);
+        requireMaximumLength(description, "description", 500);
         String address = required(fields, "addressLine1");
         String addressLine2 = optional(fields, "addressLine2");
         String city = required(fields, "city");
@@ -174,8 +173,6 @@ public class PropertyService {
         int squareFeet = integer(fields, "squareFeet", 1, Integer.MAX_VALUE);
         String stayType = oneOf(required(fields, "stayType"), "PayingGuest", "WholeUnit");
         String bathType = oneOf(required(fields, "bathType"), "Private", "SharedBath");
-        // Gender preference is disabled. Preserve the legacy column with a neutral value.
-        String genderPreference = "NoPreference";
         boolean petsAllowed = bool(fields.get("isPetsAllowed"));
         boolean parkingIncluded = bool(fields.get("isParkingIncluded"));
         double longitude = requiredCoordinate(fields, "longitude", -180, 180);
@@ -193,17 +190,16 @@ public class PropertyService {
                 .param("postalCode", postalCode).param("longitude", longitude).param("latitude", latitude)
                 .query(Long.class).single();
         long propertyId = jdbc.sql("""
-                INSERT INTO properties(manager_user_id,location_id,name,description,stay_type,bath_type,gender_preference,
+                INSERT INTO properties(manager_user_id,location_id,name,description,stay_type,bath_type,
                     price_per_month,security_deposit,application_fee,pets_allowed,parking_included,beds,baths,square_feet,
                     property_type,available_from,status)
-                VALUES(:managerId,:locationId,:name,:description,:stayType,:bathType,:genderPreference,:price,:deposit,:fee,
+                VALUES(:managerId,:locationId,:name,:description,:stayType,:bathType,:price,:deposit,:fee,
                     :pets,:parking,:beds,:baths,:squareFeet,:propertyType,:availableFrom,'PUBLISHED') RETURNING id
                 """).param("managerId", managerId).param("locationId", locationId).param("name", name)
                 .param("description", description).param("price", price).param("deposit", deposit).param("fee", fee)
-                .param("stayType", stayType).param("bathType", bathType).param("genderPreference", genderPreference)
+                .param("stayType", stayType).param("bathType", bathType)
                 .param("pets", petsAllowed).param("parking", parkingIncluded)
-                .param("beds", stayType.equals("PayingGuest") ? 1 : beds)
-                .param("baths", stayType.equals("PayingGuest") ? 1 : baths).param("squareFeet", squareFeet)
+                .param("beds", beds).param("baths", baths).param("squareFeet", squareFeet)
                 .param("propertyType", required(fields, "propertyType"))
                 .param("availableFrom", date(fields.get("availableFrom"))).query(Long.class).single();
         jdbc.sql("""
@@ -232,7 +228,7 @@ public class PropertyService {
                 .query(Boolean.class).single();
         String stayType = oneOf(required(fields, "stayType"), "PayingGuest", "WholeUnit");
         String description = required(fields, "description");
-        requireMinimumLength(description, "description", 500);
+        requireMaximumLength(description, "description", 500);
         jdbc.sql("""
                 UPDATE locations SET address_line1=:address,address_line2=:addressLine2,city=:city,
                     state_name=:stateName,state_code=:stateCode,country_name=:countryName,country_code=:countryCode,
@@ -247,7 +243,7 @@ public class PropertyService {
                 .param("longitude", longitude).param("latitude", latitude).param("id", propertyId).update();
         jdbc.sql("""
                 UPDATE properties SET name=:name,description=:description,stay_type=:stayType,bath_type=:bathType,
-                    gender_preference=:genderPreference,price_per_month=:price,
+                    price_per_month=:price,
                     security_deposit=:deposit,pets_allowed=:pets,parking_included=:parking,pet_count=:petCount,
                     pet_fee=:petFee,parking_fee=:parkingFee,smoking_included=:smoking,beds=:beds,baths=:baths,
                     square_feet=:squareFeet,property_type=:propertyType WHERE id=:id
@@ -260,10 +256,8 @@ public class PropertyService {
                 .param("smoking", bool(fields.get("smokingIncluded")))
                 .param("stayType", stayType)
                 .param("bathType", oneOf(required(fields, "bathType"), "Private", "SharedBath"))
-                // Gender preference is disabled. Preserve the legacy column with a neutral value.
-                .param("genderPreference", "NoPreference")
-                .param("beds", "PayingGuest".equals(stayType) ? 1 : integer(fields, "beds", 1, 100))
-                .param("baths", "PayingGuest".equals(stayType) ? 1 : integer(fields, "baths", 1, 100))
+                .param("beds", integer(fields, "beds", 1, 100))
+                .param("baths", integer(fields, "baths", 1, 100))
                 .param("squareFeet", integer(fields, "squareFeet", 1, Integer.MAX_VALUE))
                 .param("propertyType", required(fields, "propertyType")).param("id", propertyId).update();
         jdbc.sql("DELETE FROM property_amenities WHERE property_id=:id").param("id", propertyId).update();
@@ -338,9 +332,9 @@ public class PropertyService {
         String value = fields.get(key);
         return value == null || value.isBlank() ? null : value.trim();
     }
-    private static void requireMinimumLength(String value, String field, int minimum) {
-        if (value.length() < minimum)
-            throw new IllegalArgumentException(field + " must contain at least " + minimum + " characters");
+    private static void requireMaximumLength(String value, String field, int maximum) {
+        if (value.length() > maximum)
+            throw new IllegalArgumentException(field + " cannot exceed " + maximum + " characters");
     }
     private static BigDecimal decimal(Map<String, String> fields, String key, boolean zeroAllowed) {
         try {
