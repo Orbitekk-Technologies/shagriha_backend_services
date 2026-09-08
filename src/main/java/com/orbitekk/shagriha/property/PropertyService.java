@@ -295,7 +295,8 @@ public class PropertyService {
             }
         }
         existing.forEach(url -> {
-            if (!url.startsWith("data:image/")) throw new IllegalArgumentException("Saved photos must be images");
+            if (!url.startsWith("data:image/") && !url.startsWith("https://"))
+                throw new IllegalArgumentException("Saved photos must use a secure image URL");
         });
         if (existing.isEmpty() && uploaded.isEmpty())
             throw new IllegalArgumentException("At least one property photo is required");
