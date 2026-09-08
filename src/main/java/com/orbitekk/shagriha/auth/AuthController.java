@@ -57,6 +57,22 @@ public class AuthController {
         users.save(user);
         return response(user);
     }
+    @PostMapping("/change-password") @Transactional
+    public void changePassword(@org.springframework.security.core.annotation.AuthenticationPrincipal Jwt jwt,
+                               @Valid @RequestBody ChangePasswordRequest request) {
+        UUID id = UUID.fromString(jwt.getSubject());
+        AppUser user = users.findById(id).orElseThrow();
+        if (user.getProvider() != AuthProvider.LOCAL)
+            throw new IllegalArgumentException("Password changes are managed by your sign-in provider");
+        if (!passwords.matches(request.currentPassword(), user.getPasswordHash()))
+            throw new IllegalArgumentException("Current password is incorrect");
+        if (!request.newPassword().equals(request.confirmPassword()))
+            throw new IllegalArgumentException("Passwords do not match");
+        if (passwords.matches(request.newPassword(), user.getPasswordHash()))
+            throw new IllegalArgumentException("New password must be different from the current password");
+        user.changePassword(passwords.encode(request.newPassword()));
+        users.save(user);
+    }
     @GetMapping("/me")
     public Map<String, Object> me(@org.springframework.security.core.annotation.AuthenticationPrincipal Jwt jwt) {
         UUID id = UUID.fromString(jwt.getSubject());
@@ -64,7 +80,8 @@ public class AuthController {
         String table = "user_profiles";
         Map<String, Object> profile = jdbc.sql("SELECT p.id, p.user_id AS \"userId\", p.name, u.email, p.phone_number AS \"phoneNumber\", p.image_url AS image FROM " + table + " p JOIN users u ON u.id=p.user_id WHERE p.user_id=:id")
                 .param("id", id).query().singleRow();
-        return Map.of("authInfo", Map.of("userId", id, "username", user.getUsername()),
+        return Map.of("authInfo", Map.of("userId", id, "username", user.getUsername(),
+                        "provider", user.getProvider().name().toLowerCase()),
                 "userInfo", profile, "userRole", user.getRole().name().toLowerCase());
     }
     @PostMapping("/enable-manager") @Transactional
@@ -86,6 +103,8 @@ public class AuthController {
     public record LoginRequest(@NotBlank String login, @NotBlank String password) {}
     public record ResetPasswordRequest(@Email @NotBlank @Size(max=80) String email,
             @Size(min=10,max=100) String password, @NotBlank String confirmPassword) {}
+    public record ChangePasswordRequest(@NotBlank String currentPassword,
+            @Size(min=10,max=100) String newPassword, @NotBlank String confirmPassword) {}
     public record EnableManagerRequest(@AssertTrue boolean authorizedToList) {}
     public record AuthResponse(TokenService.AccessToken token, UUID userId, String username, UserRole role) {}
 }

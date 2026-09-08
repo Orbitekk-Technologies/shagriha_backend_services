@@ -361,7 +361,7 @@ apache2ctl configtest
 ss -ltnp | grep -E ':(3000|8080|5432)[[:space:]]'
 ```
 
-## 8. Production cutover preparation
+  ## 8. Production cutover preparation
 
 The September 1 deployment did not modify the old live server or its DNS. Before moving `shagriha.com` or `www.shagriha.com`:
 
