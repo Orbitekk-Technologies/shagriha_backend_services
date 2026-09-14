@@ -27,7 +27,8 @@ public class RentalApplicationService {
         return jdbc.sql("SELECT a.* FROM applications a JOIN properties p ON p.id=a.property_id WHERE " + condition + " ORDER BY a.applied_at DESC")
                 .param("userId", userId).query((rs, n) -> view(rs.getLong("id"), rs.getLong("property_id"),
                         rs.getObject("tenant_user_id", UUID.class), rs.getString("name"), rs.getString("email"),
-                        rs.getString("phone_number"), rs.getString("message"), rs.getString("status"),
+                        rs.getString("phone_number"), rs.getObject("desired_move_in_date", LocalDate.class),
+                        rs.getString("message"), rs.getString("status"),
                         rs.getTimestamp("applied_at").toInstant())).list();
     }
 
@@ -39,27 +40,37 @@ public class RentalApplicationService {
         boolean exists = jdbc.sql("SELECT EXISTS(SELECT 1 FROM applications WHERE property_id=:propertyId AND tenant_user_id=:tenantId)")
                 .param("propertyId", request.propertyId()).param("tenantId", tenantId).query(Boolean.class).single();
         if (exists) throw ApiException.conflict("You have already applied for this property");
-        long id = jdbc.sql("INSERT INTO applications(property_id,tenant_user_id,name,email,phone_number,message) VALUES(:propertyId,:tenantId,:name,:email,:phone,:message) RETURNING id")
+        long id = jdbc.sql("INSERT INTO applications(property_id,tenant_user_id,name,email,phone_number,desired_move_in_date,message) VALUES(:propertyId,:tenantId,:name,:email,:phone,:moveInDate,:message) RETURNING id")
                 .param("propertyId", request.propertyId()).param("tenantId", tenantId).param("name", request.name().trim())
                 .param("email", request.email().trim().toLowerCase()).param("phone", request.phoneNumber().trim())
+                .param("moveInDate", request.desiredMoveInDate())
                 .param("message", request.message()).query(Long.class).single();
         return getRaw(id);
     }
 
     @Transactional
-    public ApplicationView updateStatus(UUID managerId, long id, String requestedStatus) {
+    public ApplicationView updateStatus(UUID managerId, long id, String requestedStatus,
+                                        LocalDate startDate, LocalDate endDate) {
         String status = normalizeStatus(requestedStatus);
         var owners = jdbc.sql("SELECT p.manager_user_id,a.status,a.property_id,a.tenant_user_id,p.price_per_month,p.security_deposit FROM applications a JOIN properties p ON p.id=a.property_id WHERE a.id=:id")
                 .param("id", id).query().listOfRows();
         if (owners.isEmpty()) throw ApiException.notFound("Application not found");
         var owner = owners.getFirst();
         if (!managerId.equals(owner.get("manager_user_id"))) throw ApiException.forbidden("You cannot manage this application");
+        if ("APPROVED".equals(status)) {
+            if (startDate == null || endDate == null)
+                throw new IllegalArgumentException("Start date and end date are required to approve an application");
+            if (!endDate.isAfter(startDate))
+                throw new IllegalArgumentException("End date must be after start date");
+        }
         if ("APPROVED".equals(status) && !"APPROVED".equals(owner.get("status"))) {
-            LocalDate start = LocalDate.now(ZoneOffset.UTC);
             jdbc.sql("INSERT INTO leases(property_id,tenant_user_id,application_id,start_date,end_date,rent,deposit) VALUES(:propertyId,:tenantId,:applicationId,:start,:end,:rent,:deposit)")
                     .param("propertyId", owner.get("property_id")).param("tenantId", owner.get("tenant_user_id"))
-                    .param("applicationId", id).param("start", start).param("end", start.plusYears(1))
+                    .param("applicationId", id).param("start", startDate).param("end", endDate)
                     .param("rent", owner.get("price_per_month")).param("deposit", owner.get("security_deposit")).update();
+        } else if ("APPROVED".equals(status)) {
+            jdbc.sql("UPDATE leases SET start_date=:start,end_date=:end WHERE application_id=:applicationId")
+                    .param("start", startDate).param("end", endDate).param("applicationId", id).update();
         }
         if (!"APPROVED".equals(status) && "APPROVED".equals(owner.get("status")))
             throw ApiException.conflict("An approved application with a lease cannot be moved backwards");
@@ -71,18 +82,19 @@ public class RentalApplicationService {
         return jdbc.sql("SELECT * FROM applications WHERE id=:id").param("id", id)
                 .query((rs, n) -> view(rs.getLong("id"), rs.getLong("property_id"),
                         rs.getObject("tenant_user_id", UUID.class), rs.getString("name"), rs.getString("email"),
-                        rs.getString("phone_number"), rs.getString("message"), rs.getString("status"),
+                        rs.getString("phone_number"), rs.getObject("desired_move_in_date", LocalDate.class),
+                        rs.getString("message"), rs.getString("status"),
                         rs.getTimestamp("applied_at").toInstant())).single();
     }
 
     private ApplicationView view(long id, long propertyId, UUID tenantId, String name, String email,
-                                 String phone, String message, String status, Instant appliedAt) {
+                                 String phone, LocalDate desiredMoveInDate, String message, String status, Instant appliedAt) {
         LeaseView.TenantSummary tenant = jdbc.sql("SELECT p.id,p.user_id,p.name,u.email,p.phone_number,p.image_url FROM user_profiles p JOIN users u ON u.id=p.user_id WHERE p.user_id=:id")
                 .param("id", tenantId).query((rs, n) -> new LeaseView.TenantSummary(rs.getLong("id"),
                         rs.getObject("user_id", UUID.class), rs.getString("name"), rs.getString("email"),
                         rs.getString("phone_number"), rs.getString("image_url"))).single();
         LeaseView lease = leases.forApplication(id).orElse(null);
-        return new ApplicationView(id, appliedAt, display(status), propertyId, tenantId, name, email, phone,
+        return new ApplicationView(id, appliedAt, display(status), propertyId, tenantId, name, email, phone, desiredMoveInDate,
                 message, lease == null ? null : lease.id(), properties.get(propertyId), tenant, lease);
     }
 
@@ -98,9 +110,10 @@ public class RentalApplicationService {
                                 @Pattern(regexp="^[\\p{L}][\\p{L}\\p{M}' -]*$", message="name can only contain letters, spaces, apostrophes, and hyphens") String name,
                                 @NotBlank @Email @Size(max=255) String email,
                                 @NotBlank @Pattern(regexp="\\d{10}", message="phoneNumber must contain exactly 10 digits") String phoneNumber,
+                                @NotNull @FutureOrPresent LocalDate desiredMoveInDate,
                                 @Size(max=4000) String message) {}
     public record ApplicationView(long id, Instant applicationDate, String status, long propertyId,
                                   UUID tenantUserId, String name, String email, String phoneNumber,
-                                  String message, Long leaseId, PropertyView property,
+                                  LocalDate desiredMoveInDate, String message, Long leaseId, PropertyView property,
                                   LeaseView.TenantSummary tenant, LeaseView lease) {}
 }
