@@ -11,7 +11,7 @@ public record PropertyView(
         List<String> amenities, List<String> highlights, boolean isPetsAllowed,
         boolean isParkingIncluded, Integer petCount, BigDecimal petFee, BigDecimal parkingFee,
         boolean smokingIncluded, String stayType, String bathType,
-        int beds, int baths, int squareFeet,
+        int beds, BigDecimal baths, int squareFeet,
         String propertyType, Instant postedDate, double averageRating, int numberOfReviews,
         long locationId, UUID managerUserId, LocationView location, ManagerView manager) {
     public PropertyView(long id, String name, String description, BigDecimal pricePerMonth,
@@ -22,7 +22,7 @@ public record PropertyView(
                         long locationId, UUID managerUserId, LocationView location, ManagerView manager) {
         this(id, name, description, pricePerMonth, securityDeposit, applicationFee, photoUrls,
                 amenities, highlights, isPetsAllowed, isParkingIncluded, null, null, null,
-                false, "WholeUnit", "Private", beds, baths, squareFeet,
+                false, "WholeUnit", "Private", beds, BigDecimal.valueOf(baths), squareFeet,
                 propertyType, postedDate, averageRating, numberOfReviews, locationId, managerUserId, location, manager);
     }
     public record Coordinates(double longitude, double latitude) {}

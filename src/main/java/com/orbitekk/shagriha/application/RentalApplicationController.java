@@ -25,11 +25,12 @@ public class RentalApplicationController {
     }
     @PutMapping("/{id}/status") RentalApplicationService.ApplicationView status(@AuthenticationPrincipal Jwt jwt,
             @PathVariable long id, @Valid @RequestBody StatusRequest request) {
-        return applications.updateStatus(subject(jwt), id, request.status());
+        return applications.updateStatus(subject(jwt), id, request.status(), request.startDate(), request.endDate());
     }
     private static UUID subject(Jwt jwt) { return UUID.fromString(jwt.getSubject()); }
     static boolean managerView(Jwt jwt, String view) {
         return "manager".equalsIgnoreCase(view);
     }
-    public record StatusRequest(@NotBlank String status) {}
+    public record StatusRequest(@NotBlank String status, java.time.LocalDate startDate,
+                                java.time.LocalDate endDate) {}
 }

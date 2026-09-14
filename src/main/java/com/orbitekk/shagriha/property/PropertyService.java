@@ -40,7 +40,7 @@ public class PropertyService {
                 .filter(p -> priceMin == null || p.pricePerMonth().compareTo(priceMin) >= 0)
                 .filter(p -> priceMax == null || p.pricePerMonth().compareTo(priceMax) <= 0)
                 .filter(p -> beds == null || p.beds() >= beds)
-                .filter(p -> baths == null || p.baths() >= baths)
+                .filter(p -> baths == null || p.baths().compareTo(BigDecimal.valueOf(baths)) >= 0)
                 .filter(p -> squareFeetMin == null || p.squareFeet() >= squareFeetMin)
                 .filter(p -> squareFeetMax == null || p.squareFeet() <= squareFeetMax)
                 .filter(p -> propertyType == null || propertyType.equalsIgnoreCase("any") || p.propertyType().equalsIgnoreCase(propertyType))
@@ -89,7 +89,7 @@ public class PropertyService {
                 AND (CAST(:priceMin AS numeric) IS NULL OR p.price_per_month >= :priceMin)
                 AND (CAST(:priceMax AS numeric) IS NULL OR p.price_per_month <= :priceMax)
                 AND (CAST(:beds AS integer) IS NULL OR p.beds >= :beds)
-                AND (CAST(:baths AS integer) IS NULL OR p.baths >= :baths)
+                AND (CAST(:baths AS numeric) IS NULL OR p.baths >= :baths)
                 AND (CAST(:squareFeetMin AS integer) IS NULL OR p.square_feet >= :squareFeetMin)
                 AND (CAST(:squareFeetMax AS integer) IS NULL OR p.square_feet <= :squareFeetMax)
                 AND (CAST(:propertyType AS varchar) IS NULL OR lower(p.property_type)=lower(:propertyType))
@@ -169,9 +169,9 @@ public class PropertyService {
         BigDecimal deposit = decimal(fields, "securityDeposit", true);
         BigDecimal fee = optionalDecimal(fields, "applicationFee", BigDecimal.ZERO);
         int beds = integer(fields, "beds", 1, 100);
-        int baths = integer(fields, "baths", 1, 100);
         int squareFeet = integer(fields, "squareFeet", 1, Integer.MAX_VALUE);
         String stayType = oneOf(required(fields, "stayType"), "PayingGuest", "WholeUnit");
+        BigDecimal baths = bathrooms(fields, stayType);
         String bathType = oneOf(required(fields, "bathType"), "Private", "SharedBath");
         boolean petsAllowed = bool(fields.get("isPetsAllowed"));
         boolean parkingIncluded = bool(fields.get("isParkingIncluded"));
@@ -257,7 +257,7 @@ public class PropertyService {
                 .param("stayType", stayType)
                 .param("bathType", oneOf(required(fields, "bathType"), "Private", "SharedBath"))
                 .param("beds", integer(fields, "beds", 1, 100))
-                .param("baths", integer(fields, "baths", 1, 100))
+                .param("baths", bathrooms(fields, stayType))
                 .param("squareFeet", integer(fields, "squareFeet", 1, Integer.MAX_VALUE))
                 .param("propertyType", required(fields, "propertyType")).param("id", propertyId).update();
         jdbc.sql("DELETE FROM property_amenities WHERE property_id=:id").param("id", propertyId).update();
@@ -361,6 +361,17 @@ public class PropertyService {
             if (value < min || value > max) throw new NumberFormatException();
             return value;
         } catch (NumberFormatException ex) { throw new IllegalArgumentException(key + " is invalid"); }
+    }
+    private static BigDecimal bathrooms(Map<String, String> fields, String stayType) {
+        BigDecimal value = decimal(fields, "baths", false);
+        boolean withinRange = value.compareTo(BigDecimal.valueOf(100)) <= 0;
+        boolean validIncrement = "WholeUnit".equals(stayType)
+                ? value.multiply(BigDecimal.valueOf(2)).stripTrailingZeros().scale() <= 0
+                : value.stripTrailingZeros().scale() <= 0;
+        if (!withinRange || !validIncrement) {
+            throw new IllegalArgumentException("Whole unit bathrooms must use 0.5 increments; private room bathrooms must be whole numbers");
+        }
+        return value;
     }
     private static Integer optionalInteger(Map<String, String> fields, String key, int min, int max) {
         String value = fields.get(key);
