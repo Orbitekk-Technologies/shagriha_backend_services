@@ -3,6 +3,7 @@ package com.orbitekk.shagriha.application;
 import com.orbitekk.shagriha.common.ApiException;
 import com.orbitekk.shagriha.lease.LeaseService;
 import com.orbitekk.shagriha.lease.LeaseView;
+import com.orbitekk.shagriha.lease.LeaseDocumentService;
 import com.orbitekk.shagriha.property.PropertyReader;
 import com.orbitekk.shagriha.property.PropertyView;
 import jakarta.validation.constraints.*;
@@ -18,8 +19,9 @@ public class RentalApplicationService {
     private final JdbcClient jdbc;
     private final PropertyReader properties;
     private final LeaseService leases;
-    public RentalApplicationService(JdbcClient jdbc, PropertyReader properties, LeaseService leases) {
-        this.jdbc = jdbc; this.properties = properties; this.leases = leases;
+    private final LeaseDocumentService leaseDocuments;
+    public RentalApplicationService(JdbcClient jdbc, PropertyReader properties, LeaseService leases, LeaseDocumentService leaseDocuments) {
+        this.jdbc = jdbc; this.properties = properties; this.leases = leases; this.leaseDocuments = leaseDocuments;
     }
 
     public List<ApplicationView> list(UUID userId, boolean manager) {
@@ -62,6 +64,8 @@ public class RentalApplicationService {
                 throw new IllegalArgumentException("Start date and end date are required to approve an application");
             if (!endDate.isAfter(startDate))
                 throw new IllegalArgumentException("End date must be after start date");
+            if (!leaseDocuments.exists(((Number) owner.get("property_id")).longValue()))
+                throw ApiException.conflict("Upload a lease document before approving this application");
         }
         if ("APPROVED".equals(status) && !"APPROVED".equals(owner.get("status"))) {
             jdbc.sql("INSERT INTO leases(property_id,tenant_user_id,application_id,start_date,end_date,rent,deposit) VALUES(:propertyId,:tenantId,:applicationId,:start,:end,:rent,:deposit)")
