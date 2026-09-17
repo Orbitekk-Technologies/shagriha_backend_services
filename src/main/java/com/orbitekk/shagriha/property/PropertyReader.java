@@ -66,7 +66,7 @@ public class PropertyReader {
     }
 
     public List<PropertyView> currentResidences(java.util.UUID tenantId) {
-        return jdbc.sql(SELECT.replace("SELECT p.*", "SELECT DISTINCT p.*") + " JOIN leases le ON le.property_id=p.id WHERE le.tenant_user_id=:tenantId AND CURRENT_DATE BETWEEN le.start_date AND le.end_date ORDER BY p.posted_at DESC")
+        return jdbc.sql(SELECT.replace("SELECT p.*", "SELECT DISTINCT p.*") + " JOIN leases le ON le.property_id=p.id WHERE le.tenant_user_id=:tenantId AND CURRENT_DATE <= le.end_date ORDER BY p.posted_at DESC")
                 .param("tenantId", tenantId).query(this::map).list();
     }
 
@@ -89,7 +89,7 @@ public class PropertyReader {
                 rs.getBigDecimal("application_fee"), photos, amenities, highlights,
                 rs.getBoolean("pets_allowed"), rs.getBoolean("parking_included"),
                 rs.getObject("pet_count", Integer.class), rs.getBigDecimal("pet_fee"), rs.getBigDecimal("parking_fee"),
-                rs.getBoolean("smoking_included"), rs.getString("stay_type"), rs.getString("bath_type"),
+                rs.getBoolean("smoking_included"), rs.getString("listed_by"), rs.getString("stay_type"), rs.getString("bath_type"),
                 rs.getInt("beds"),
                 rs.getBigDecimal("baths"), rs.getInt("square_feet"), rs.getString("property_type"),
                 rs.getTimestamp("posted_at").toInstant(), 0, 0, rs.getLong("location_id"),

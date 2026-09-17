@@ -36,6 +36,7 @@ public class PropertyController {
             @RequestParam(required=false) String propertyType, @RequestParam(required=false) Integer squareFeetMin,
             @RequestParam(required=false) Integer squareFeetMax, @RequestParam(required=false) String amenities,
             @RequestParam(required=false) String stayType, @RequestParam(required=false) String bathType,
+            @RequestParam(required=false) String listedBy,
             // Gender preference filtering is intentionally disabled for now.
             @RequestParam(required=false) Boolean petsAllowed, @RequestParam(required=false) Boolean parkingIncluded,
             @RequestParam(required=false) Boolean smokingIncluded,
@@ -48,7 +49,7 @@ public class PropertyController {
             @RequestParam(defaultValue="0") int page, @RequestParam(defaultValue="20") int size,
             @RequestParam(defaultValue="newest") String sort) {
         return properties.search(priceMin, priceMax, beds, baths, propertyType, squareFeetMin, squareFeetMax,
-                amenities, stayType, bathType, petsAllowed, parkingIncluded, smokingIncluded,
+                amenities, stayType, bathType, listedBy, petsAllowed, parkingIncluded, smokingIncluded,
                 petCount, petFeeMax, parkingFeeMax, availableFrom, latitude, longitude, city, state, location, page, size, sort);
     }
 

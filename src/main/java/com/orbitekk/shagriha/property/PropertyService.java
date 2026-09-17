@@ -51,7 +51,7 @@ public class PropertyService {
 
     public PropertySearchResult search(BigDecimal priceMin, BigDecimal priceMax, Integer beds, Integer baths,
                                        String propertyType, Integer squareFeetMin, Integer squareFeetMax,
-                                       String amenities, String stayType, String bathType,
+                                       String amenities, String stayType, String bathType, String listedBy,
                                        Boolean petsAllowed, Boolean parkingIncluded, Boolean smokingIncluded,
                                        Integer petCount, BigDecimal petFeeMax, BigDecimal parkingFeeMax,
                                        LocalDate availableFrom, Double latitude, Double longitude,
@@ -95,6 +95,7 @@ public class PropertyService {
                 AND (CAST(:propertyType AS varchar) IS NULL OR lower(p.property_type)=lower(:propertyType))
                 AND (CAST(:stayType AS varchar) IS NULL OR lower(p.stay_type)=lower(:stayType))
                 AND (CAST(:bathType AS varchar) IS NULL OR lower(p.bath_type)=lower(:bathType))
+                AND (CAST(:listedBy AS varchar) IS NULL OR p.listed_by=:listedBy)
                 AND (CAST(:petsAllowed AS boolean) IS NULL OR p.pets_allowed=:petsAllowed)
                 AND (CAST(:parkingIncluded AS boolean) IS NULL OR p.parking_included=:parkingIncluded)
                 AND (CAST(:smokingIncluded AS boolean) IS NULL OR p.smoking_included=:smokingIncluded)
@@ -118,6 +119,8 @@ public class PropertyService {
                 .param("propertyType", propertyType == null || propertyType.equalsIgnoreCase("any") ? null : propertyType)
                 .param("stayType", anyToNull(stayType))
                 .param("bathType", "PayingGuest".equalsIgnoreCase(anyToNull(stayType)) ? anyToNull(bathType) : null)
+                .param("listedBy", listedBy == null || listedBy.isBlank() || listedBy.equalsIgnoreCase("any")
+                        ? null : oneOf(listedBy.trim().toUpperCase(Locale.ROOT), "AGENT", "OWNER"))
                 .param("petsAllowed", petsAllowed).param("parkingIncluded", parkingIncluded)
                 .param("smokingIncluded", smokingIncluded)
                 .param("petCount", petCount).param("petFeeMax", petFeeMax).param("parkingFeeMax", parkingFeeMax)
@@ -173,6 +176,7 @@ public class PropertyService {
         String stayType = oneOf(required(fields, "stayType"), "PayingGuest", "WholeUnit");
         BigDecimal baths = bathrooms(fields, stayType);
         String bathType = oneOf(required(fields, "bathType"), "Private", "SharedBath");
+        String listedBy = validatedListedBy(fields);
         boolean petsAllowed = bool(fields.get("isPetsAllowed"));
         boolean parkingIncluded = bool(fields.get("isParkingIncluded"));
         double longitude = requiredCoordinate(fields, "longitude", -180, 180);
@@ -192,15 +196,16 @@ public class PropertyService {
         long propertyId = jdbc.sql("""
                 INSERT INTO properties(manager_user_id,location_id,name,description,stay_type,bath_type,
                     price_per_month,security_deposit,application_fee,pets_allowed,parking_included,beds,baths,square_feet,
-                    property_type,available_from,status)
+                    property_type,listed_by,available_from,status)
                 VALUES(:managerId,:locationId,:name,:description,:stayType,:bathType,:price,:deposit,:fee,
-                    :pets,:parking,:beds,:baths,:squareFeet,:propertyType,:availableFrom,'PUBLISHED') RETURNING id
+                    :pets,:parking,:beds,:baths,:squareFeet,:propertyType,:listedBy,:availableFrom,'PUBLISHED') RETURNING id
                 """).param("managerId", managerId).param("locationId", locationId).param("name", name)
                 .param("description", description).param("price", price).param("deposit", deposit).param("fee", fee)
                 .param("stayType", stayType).param("bathType", bathType)
                 .param("pets", petsAllowed).param("parking", parkingIncluded)
                 .param("beds", beds).param("baths", baths).param("squareFeet", squareFeet)
                 .param("propertyType", required(fields, "propertyType"))
+                .param("listedBy", listedBy)
                 .param("availableFrom", date(fields.get("availableFrom"))).query(Long.class).single();
         jdbc.sql("""
                 UPDATE properties SET pet_count=:petCount,pet_fee=:petFee,parking_fee=:parkingFee,smoking_included=:smoking
@@ -227,6 +232,7 @@ public class PropertyService {
                 """).param("longitude", longitude).param("latitude", latitude).param("id", propertyId)
                 .query(Boolean.class).single();
         String stayType = oneOf(required(fields, "stayType"), "PayingGuest", "WholeUnit");
+        String listedBy = validatedListedBy(fields);
         String description = required(fields, "description");
         requireMaximumLength(description, "description", 500);
         jdbc.sql("""
@@ -246,7 +252,7 @@ public class PropertyService {
                     price_per_month=:price,
                     security_deposit=:deposit,pets_allowed=:pets,parking_included=:parking,pet_count=:petCount,
                     pet_fee=:petFee,parking_fee=:parkingFee,smoking_included=:smoking,beds=:beds,baths=:baths,
-                    square_feet=:squareFeet,property_type=:propertyType WHERE id=:id
+                    square_feet=:squareFeet,property_type=:propertyType,listed_by=:listedBy WHERE id=:id
                 """).param("name", required(fields, "name")).param("description", description)
                 .param("price", decimal(fields, "pricePerMonth", false)).param("deposit", decimal(fields, "securityDeposit", true))
                 .param("pets", bool(fields.get("isPetsAllowed"))).param("parking", bool(fields.get("isParkingIncluded")))
@@ -259,7 +265,9 @@ public class PropertyService {
                 .param("beds", integer(fields, "beds", 1, 100))
                 .param("baths", bathrooms(fields, stayType))
                 .param("squareFeet", integer(fields, "squareFeet", 1, Integer.MAX_VALUE))
-                .param("propertyType", required(fields, "propertyType")).param("id", propertyId).update();
+                .param("propertyType", required(fields, "propertyType"))
+                .param("listedBy", listedBy).param("id", propertyId).update();
+
         jdbc.sql("DELETE FROM property_amenities WHERE property_id=:id").param("id", propertyId).update();
         insertValues(propertyId, "property_amenities", "amenity", stringSet(fields.get("amenities")));
         jdbc.sql("DELETE FROM property_photos WHERE property_id=:id").param("id", propertyId).update();
@@ -385,6 +393,13 @@ public class PropertyService {
     private static String oneOf(String value, String... allowed) {
         if (Arrays.asList(allowed).contains(value)) return value;
         throw new IllegalArgumentException("Invalid option: " + value);
+    }
+    private static String validatedListedBy(Map<String, String> fields) {
+        String listedBy = oneOf(required(fields, "listedBy").toUpperCase(Locale.ROOT), "AGENT", "OWNER");
+        if ("AGENT".equals(listedBy) && !bool(fields.get("advertisingAuthorized"))) {
+            throw new IllegalArgumentException("Advertising authorization must be confirmed for agent listings");
+        }
+        return listedBy;
     }
     private static double requiredCoordinate(Map<String, String> fields, String key, double min, double max) {
         try {
