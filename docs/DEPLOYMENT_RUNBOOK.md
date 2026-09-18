@@ -1,6 +1,14 @@
 # Shagriha Deployment Runbook
 
-Last updated: September 1, 2026
+Last updated: September 17, 2026
+
+> **Current guide:** This file retains details from the September 1 sandbox
+> deployment. Sandbox and production now both run on `212.28.189.194` as
+> separate services, ports, directories, and databases. Use
+> [SANDBOX_AND_PRODUCTION_DEPLOYMENT.md](SANDBOX_AND_PRODUCTION_DEPLOYMENT.md)
+> for the current end-to-end release procedure and September 17 deployment
+> record. Do not use the old production-cutover assumptions below as current
+> infrastructure documentation.
 
 This document records the verified sandbox deployment process for Shagriha and provides a safe basis for future test and production releases. It intentionally contains no passwords, OAuth secrets, or API tokens.
 
